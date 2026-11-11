@@ -1,0 +1,2840 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<script>
+// Run before paint; rotation must not turn a phone into the desktop layout.
+(function () {
+  const phone = /Android.*Mobile|iPhone|iPod|Windows Phone/i.test(navigator.userAgent);
+  const touch = navigator.maxTouchPoints > 0;
+  const handheld = navigator.userAgentData && navigator.userAgentData.mobile;
+  window.smartlockPhone = phone || Boolean(handheld) || (touch && /Android|iPad/i.test(navigator.userAgent) && Math.min(screen.width, screen.height) <= 768);
+  document.documentElement.classList.toggle('is-phone', window.smartlockPhone);
+  window.syncSmartlockLayout = function () {
+    document.documentElement.classList.toggle('is-mobile', window.smartlockPhone || matchMedia('(max-width: 768px)').matches);
+  };
+  window.syncSmartlockLayout();
+})();
+</script>
+<title>Smartlock — Access Console</title>
+<link rel="stylesheet" href="/dashboard-assets/face-unlock.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0a0d12;
+  --bg-elevated:#10141c;
+  --panel:#151a24;
+  --panel-2:#1b212d;
+  --border:#242b38;
+  --border-soft:#1c222d;
+  --text:#e8ebf1;
+  --text-dim:#8891a3;
+  --text-faint:#525b6c;
+  --geofence:#4fd1c5;
+  --face:#c792ea;
+  --nfc:#f5b342;
+  --success:#4ade80;
+  --danger:#f87171;
+  --warning:#fbbf24;
+  --font-display:'Space Grotesk',sans-serif;
+  --font-body:'Plus Jakarta Sans','Inter',sans-serif;
+  --font-mono:'JetBrains Mono',monospace;
+}
+body.theme-light{
+  --bg:#eceef2;
+  --bg-elevated:#ffffff;
+  --panel:#ffffff;
+  --panel-2:#e6e9ee;
+  --border:#d5d9e0;
+  --border-soft:#e6e9ee;
+  --text:#12151b;
+  --text-dim:#4b5563;
+  --text-faint:#7d8695;
+  --geofence:#0d8577;
+  --face:#9440c4;
+  --nfc:#a8650a;
+  --success:#158a49;
+  --danger:#d92626;
+  --warning:#a5480a;
+}
+body.theme-light #geofence-map .leaflet-tile-pane{filter:none}
+body.theme-light .qr-modal-box,body.theme-light #qr-code-box{background:#fff}
+body.theme-light .panel,
+body.theme-light .card,
+body.theme-light .login-card,
+body.theme-light .qr-modal-box,
+body.theme-light .chart-panel{
+  box-shadow:0 1px 2px rgba(15,23,42,.06),0 1px 6px rgba(15,23,42,.05);
+}
+body.theme-light .terminal{box-shadow:0 1px 2px rgba(15,23,42,.06)}
+body.theme-light .device-list-item.active{background:var(--panel-2);box-shadow:inset 0 0 0 1px var(--border)}
+body.theme-light .card:hover{border-color:#b7bcc6}
+body.theme-light .nav-item.active{box-shadow:inset 0 0 0 1px var(--border)}
+*{box-sizing:border-box;margin:0;padding:0}
+@media (prefers-reduced-motion: reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:var(--font-body);
+  min-height:100vh;
+  background-image:
+    radial-gradient(circle at 15% 0%, rgba(79,209,197,0.05), transparent 40%),
+    radial-gradient(circle at 85% 100%, rgba(199,146,234,0.04), transparent 40%);
+}
+::selection{background:var(--geofence);color:#031012}
+button{font-family:inherit;cursor:pointer}
+input,select{font-family:inherit}
+a{color:inherit}
+
+/* ---------- Utility ---------- */
+.dot{width:7px;height:7px;border-radius:50%;display:inline-block;flex-shrink:0}
+.dot.on{background:var(--success);box-shadow:0 0 8px rgba(74,222,128,.7)}
+.dot.off{background:var(--text-faint)}
+.mono{font-family:var(--font-mono)}
+.pill{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:3px 10px;border-radius:20px;font-size:11.5px;font-weight:600;
+  letter-spacing:.02em;text-transform:uppercase;border:1px solid var(--border);
+}
+.badge-on{background:rgba(79,209,197,.08);border-color:rgba(79,209,197,.35)}
+.badge-off{background:transparent;color:var(--text-faint);border-color:var(--border-soft)}
+
+/* ---------- Login / responsive auth ---------- */
+#login-screen{
+  min-height:100vh;display:flex;align-items:center;justify-content:center;padding:32px 20px;
+  position:relative;isolation:isolate;overflow:hidden;
+  background:
+    radial-gradient(ellipse at 18% 18%,rgba(79,209,197,.14),transparent 34%),
+    radial-gradient(ellipse at 85% 82%,rgba(124,109,242,.12),transparent 36%),
+    linear-gradient(135deg,#080b10 0%,#0c1119 52%,#0a0d13 100%);
+}
+#login-screen::before,#login-screen::after{content:"";position:absolute;z-index:-1;pointer-events:none;border:1px solid rgba(79,209,197,.09);border-radius:50%;}
+#login-screen::before{width:560px;height:560px;left:-250px;top:-250px;box-shadow:0 0 0 55px rgba(79,209,197,.018),0 0 0 110px rgba(79,209,197,.012)}
+#login-screen::after{width:620px;height:620px;right:-350px;bottom:-360px;box-shadow:0 0 0 65px rgba(167,139,250,.018)}
+.login-card{
+  width:100%;max-width:440px;background:linear-gradient(160deg,rgba(23,29,41,.97),rgba(15,20,29,.98));
+  border:1px solid rgba(148,163,184,.19);border-radius:22px;padding:36px 36px 30px;position:relative;overflow:hidden;
+  box-shadow:0 28px 90px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.035);backdrop-filter:blur(18px);
+}
+.login-card::before{content:"";position:absolute;top:0;left:8%;right:8%;height:2px;background:linear-gradient(90deg,transparent,var(--geofence),#9b8afb,#f5b342,transparent);}
+/* QR menuju Web App: dibuat dari origin aktif, bukan URL tunnel yang di-hardcode. */
+.webapp-qr-card{display:none}
+@media (min-width:900px){
+  #login-screen{gap:24px}
+  .webapp-qr-card{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:13px;width:270px;flex:0 0 270px;padding:28px 22px;text-align:center;border:1px solid rgba(148,163,184,.22);border-radius:22px;background:linear-gradient(160deg,rgba(23,29,41,.97),rgba(15,20,29,.98));box-shadow:0 28px 90px rgba(0,0,0,.32);color:#e8ebf1}
+}
+.webapp-qr-symbol{width:42px;height:42px;display:grid;place-items:center;border-radius:12px;color:var(--geofence);background:rgba(79,209,197,.1);border:1px solid rgba(79,209,197,.25)}
+.webapp-qr-symbol svg{width:23px;height:23px}
+.webapp-qr-card h2,.webapp-qr-dialog h2{font:600 17px var(--font-display);letter-spacing:-.02em}
+.webapp-qr-card>p,.webapp-qr-dialog>p{font-size:11.5px;line-height:1.65;color:#aab4c5}
+.webapp-qr-code{display:grid;place-items:center;width:204px;height:204px;padding:10px;background:#fff;border-radius:14px;box-shadow:0 8px 26px rgba(0,0,0,.16)}
+.webapp-qr-code img,.webapp-qr-code canvas{display:block;max-width:100%;height:auto!important}
+.webapp-qr-url{display:block;max-width:100%;overflow-wrap:anywhere;font:10px/1.5 var(--font-mono);color:#cbd5e1}
+.webapp-qr-note{font-size:10px!important;color:#94a3b8!important}
+.webapp-qr-trigger{display:none;align-items:center;justify-content:center;gap:7px;min-height:40px;padding:0 12px;border:1px solid var(--border);border-radius:10px;background:var(--panel-2);color:var(--text);font:600 11px var(--font-body)}
+.webapp-qr-trigger svg{width:17px;height:17px;color:var(--geofence)}
+@media (min-width:769px){.webapp-qr-trigger{display:inline-flex}}
+html.is-mobile .webapp-qr-trigger,html.is-mobile .webapp-qr-card{display:none!important}
+.webapp-qr-overlay[hidden]{display:none!important}
+.webapp-qr-overlay{position:fixed;inset:0;z-index:100010;display:flex;align-items:center;justify-content:center;padding:22px;background:rgba(3,7,12,.72);backdrop-filter:blur(10px)}
+.webapp-qr-dialog{position:relative;display:flex;flex-direction:column;align-items:center;gap:13px;width:min(100%,390px);max-height:calc(100dvh - 44px);overflow:auto;padding:30px 26px 24px;border:1px solid var(--border);border-radius:20px;background:var(--bg-elevated);color:var(--text);box-shadow:0 28px 90px rgba(0,0,0,.38);text-align:center}
+.webapp-qr-dialog>p{color:var(--text-dim)}
+.webapp-qr-dialog .webapp-qr-code{margin:2px 0}
+.webapp-qr-dialog .webapp-qr-url{color:var(--text-dim)}
+.webapp-qr-dialog .webapp-qr-note{color:var(--text-faint)!important}
+.webapp-qr-close{position:absolute;top:10px;right:12px;width:36px;height:36px;border:1px solid var(--border);border-radius:10px;background:var(--panel-2);color:var(--text);font-size:22px}
+.webapp-qr-copy{min-height:42px;padding:0 16px;border:0;border-radius:10px;background:var(--geofence);color:#05211e;font:600 12px var(--font-body)}
+@media(max-width:600px){.webapp-qr-dialog{padding:26px 18px 20px}.webapp-qr-dialog .webapp-qr-code{width:190px;height:190px}}
+
+.brand{display:flex;align-items:center;gap:12px;margin-bottom:28px}
+.brand-mark{width:44px;height:44px;border-radius:13px;background:rgba(79,209,197,.08);border:1px solid rgba(79,209,197,.5);display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 0 28px rgba(79,209,197,.08)}
+.brand-mark svg{width:20px;height:20px}
+.brand-text{font-family:var(--font-display);font-weight:700;font-size:21px;letter-spacing:-.025em}
+.brand-sub{font-size:10px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.16em;margin-top:3px}
+.login-heading{font-family:var(--font-display);font-size:25px;line-height:1.2;letter-spacing:-.04em;margin:0 0 8px}
+.login-lead{font-size:12.5px;line-height:1.65;color:var(--text-dim);margin-bottom:24px}
+.login-card .field{margin-bottom:17px}
+.login-card .field label{font-size:12px;margin-bottom:8px;color:#aab4c5}
+.login-card .field input{min-height:45px;border-radius:10px;padding:12px 13px;background:rgba(8,12,19,.72);border-color:#2a3444;font-size:13px}
+.login-card .field input:focus{border-color:var(--geofence);box-shadow:0 0 0 3px rgba(79,209,197,.1)}
+.login-card .hint{font-size:10.5px;line-height:1.55;margin-top:7px}
+.login-card .divider{margin:21px 0 17px}
+.login-card .tab-switch{border-radius:11px;padding:4px;margin-bottom:20px;background:rgba(8,12,19,.62)}
+.login-card .tab-btn{padding:10px 0;border-radius:8px}
+.login-card .tab-btn.active{background:#283241;box-shadow:0 1px 3px rgba(0,0,0,.25);color:#f2f5fa}
+.login-card .btn{min-height:45px;border-radius:10px}
+.login-card .btn-primary{background:linear-gradient(105deg,#4fd1c5,#67e2d5);color:#06201e;box-shadow:0 8px 22px rgba(79,209,197,.13)}
+.login-card .btn-primary:hover{filter:brightness(1.06);transform:translateY(-1px)}
+.google-login-btn{width:100%;display:flex;align-items:center;justify-content:center;gap:11px;min-height:44px;padding:10px 14px;border-radius:10px;border:1px solid #394454;background:#f8fafc;color:#202733;font-size:13px;font-weight:600;transition:background .15s,transform .15s,border-color .15s}
+.google-login-btn:hover{background:#fff;border-color:#cbd5e1;transform:translateY(-1px)}
+.google-signin-official{width:100%;min-height:44px;margin:0 auto 2px;display:flex;justify-content:center;overflow:hidden}
+.google-signin-official>div{max-width:100%}
+
+.google-login-btn svg{width:18px;height:18px;flex-shrink:0}
+.auth-or{display:flex;align-items:center;gap:12px;color:var(--text-faint);font-size:10px;text-transform:uppercase;letter-spacing:.12em;margin:18px 0}
+.auth-or::before,.auth-or::after{content:"";height:1px;flex:1;background:var(--border)}
+.google-note{display:none;margin-top:10px;padding:10px 12px;border-radius:9px;border:1px solid rgba(251,191,36,.25);background:rgba(251,191,36,.07);color:#f5d38b;font-size:11px;line-height:1.55}
+.login-footnote{margin-top:22px;text-align:center;color:var(--text-faint);font-size:10px;letter-spacing:.015em}
+@media(max-width:520px){#login-screen{padding:18px 14px}.login-card{max-width:420px;padding:28px 22px 24px;border-radius:18px}.login-heading{font-size:23px}.brand{margin-bottom:24px}}
+.field{margin-bottom:16px}
+.field label{display:block;font-size:12px;color:var(--text-dim);margin-bottom:6px;font-weight:500}
+.field input{
+  width:100%;background:var(--bg-elevated);border:1px solid var(--border);
+  border-radius:8px;padding:10px 12px;color:var(--text);font-size:13.5px;outline:none;
+  transition:border-color .15s;
+}
+.field input:focus{border-color:var(--geofence)}
+.field input::placeholder{color:var(--text-faint)}
+.hint{font-size:11px;color:var(--text-faint);margin-top:6px;line-height:1.5}
+.btn{
+  border:none;border-radius:8px;padding:10px 16px;font-size:13.5px;font-weight:600;
+  transition:filter .15s, transform .1s;
+}
+.btn:active{transform:scale(.98)}
+.btn-primary{background:var(--geofence);color:#04211e;width:100%}
+.btn-primary:hover{filter:brightness(1.08)}
+.btn-primary:disabled{opacity:.5;cursor:not-allowed}
+.btn-ghost{background:transparent;border:1px solid var(--border);color:var(--text-dim)}
+.btn-ghost:hover{border-color:var(--text-dim);color:var(--text)}
+.btn-danger-ghost{background:transparent;border:1px solid rgba(248,113,113,.35);color:var(--danger)}
+.btn-danger-ghost:hover{background:rgba(248,113,113,.08)}
+.btn-sm{padding:6px 12px;font-size:12px;border-radius:6px}
+.login-error{
+  background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.35);
+  color:var(--danger);font-size:12.5px;padding:9px 12px;border-radius:8px;margin-bottom:16px;
+  display:none;
+}
+.divider{height:1px;background:var(--border);margin:22px 0 18px}
+.tab-switch{display:flex;gap:4px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:9px;padding:3px;margin-bottom:20px}
+.tab-btn{flex:1;background:transparent;border:none;color:var(--text-faint);font-size:12.5px;font-weight:600;padding:8px 0;border-radius:6px;transition:.15s}
+.tab-btn.active{background:var(--panel-2);color:var(--text)}
+.tab-btn:hover:not(.active){color:var(--text-dim)}
+
+/* ---------- Shell ---------- */
+#shell{display:none;min-height:100vh}
+#shell.active{display:flex}
+#sidebar{
+  width:216px;flex-shrink:0;background:var(--bg-elevated);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;padding:20px 14px;position:sticky;top:0;height:100vh;
+}
+.nav-group{margin-top:22px;flex:1}
+.nav-label{font-size:10px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.1em;padding:0 10px;margin-bottom:8px;font-weight:600}
+.nav-item{
+  display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;
+  color:var(--text-dim);font-size:13px;font-weight:500;cursor:pointer;margin-bottom:2px;
+  border:none;background:transparent;width:100%;text-align:left;transition:background .12s,color .12s;
+}
+.nav-item:hover{background:var(--panel-2);color:var(--text)}
+.nav-item.active{background:var(--panel-2);color:var(--text)}
+.nav-item.active .nav-ico{opacity:1}
+.nav-ico{width:15px;height:15px;flex-shrink:0;opacity:.65}
+.sidebar-foot{border-top:1px solid var(--border);padding-top:14px;margin-top:14px}
+.conn-pill{
+  display:flex;align-items:center;gap:7px;font-size:11px;color:var(--text-faint);
+  padding:6px 8px;background:var(--panel);border-radius:7px;margin-bottom:10px;
+}
+.conn-pill span.url{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--font-mono)}
+.user-row{display:flex;align-items:center;gap:9px;padding:6px 8px}
+.user-avatar{
+  width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,var(--geofence),var(--face));
+  display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#04211e;flex-shrink:0;
+}
+.user-info{flex:1;min-width:0}
+.user-name{font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.user-role{font-size:10.5px;color:var(--text-faint);text-transform:capitalize}
+.logout-btn{background:none;border:none;color:var(--text-faint);padding:4px;flex-shrink:0}
+.logout-btn:hover{color:var(--danger)}
+
+#main{flex:1;min-width:0;display:flex;flex-direction:column}
+#topbar{
+  height:56px;border-bottom:1px solid var(--border);display:flex;align-items:center;
+  justify-content:space-between;padding:0 26px;flex-shrink:0;
+}
+#page-title{font-family:var(--font-display);font-size:16px;font-weight:600}
+#page-sub{font-size:11.5px;color:var(--text-faint);margin-top:1px}
+#page-content{flex:1;padding:26px;overflow-y:auto}
+
+/* ---------- Cards / grid ---------- */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+.card{
+  background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;
+  transition:border-color .15s;cursor:pointer;
+}
+.card:hover{border-color:var(--text-faint)}
+.card-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px}
+.card-name{font-weight:600;font-size:14.5px}
+.card-code{font-family:var(--font-mono);font-size:11px;color:var(--text-faint);margin-top:2px}
+.status-row{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text-dim)}
+.card-mid{display:flex;gap:16px;margin:14px 0;font-size:12px;color:var(--text-dim)}
+.card-mid div{display:flex;align-items:center;gap:5px}
+.icon{width:14px;height:14px;opacity:.75;flex-shrink:0}
+.verif-row{display:flex;gap:6px;flex-wrap:wrap}
+
+/* ---------- Empty / loading ---------- */
+.empty-state{
+  text-align:center;padding:60px 20px;color:var(--text-faint);
+}
+.empty-state svg{width:34px;height:34px;margin-bottom:12px;opacity:.4}
+.empty-state p{font-size:13px}
+.loading-row{display:flex;align-items:center;gap:8px;color:var(--text-faint);font-size:12.5px;padding:20px 0}
+.spinner{width:13px;height:13px;border:2px solid var(--border);border-top-color:var(--geofence);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ---------- Panel / detail ---------- */
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:22px;margin-bottom:16px}
+.panel-title{font-weight:600;font-size:13.5px;margin-bottom:4px;display:flex;align-items:center;gap:8px}
+.panel-desc{font-size:11.5px;color:var(--text-faint);margin-bottom:16px;line-height:1.5}
+.two-col{display:grid;grid-template-columns:280px 1fr;gap:16px;align-items:start}
+@media (max-width:900px){.two-col{grid-template-columns:1fr}}
+.device-list-item{
+  display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:9px;cursor:pointer;
+  border:1px solid transparent;margin-bottom:4px;
+}
+.device-list-item:hover{background:var(--panel-2)}
+.device-list-item.active{background:var(--panel-2);border-color:var(--border)}
+.device-list-item .name{font-size:13px;font-weight:600}
+.device-list-item .code{font-size:10.5px;color:var(--text-faint);font-family:var(--font-mono)}
+
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:13px 0;border-bottom:1px solid var(--border-soft)}
+.toggle-row:last-child{border-bottom:none}
+.toggle-label{font-size:13px;font-weight:500}
+.toggle-desc{font-size:11px;color:var(--text-faint);margin-top:2px;max-width:360px;line-height:1.5}
+.switch{position:relative;width:38px;height:21px;flex-shrink:0}
+.switch input{opacity:0;width:0;height:0}
+.slider{
+  position:absolute;inset:0;background:var(--border);border-radius:20px;transition:.2s;cursor:pointer;
+}
+.slider::before{content:"";position:absolute;width:15px;height:15px;left:3px;top:3px;background:var(--text-dim);border-radius:50%;transition:.2s}
+input:checked + .slider{background:rgba(79,209,197,.25)}
+input:checked + .slider::before{transform:translateX(17px);background:var(--geofence)}
+
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.form-row.three{grid-template-columns:1fr 1fr 1fr}
+.form-field label{display:block;font-size:11px;color:var(--text-dim);margin-bottom:5px}
+.form-field input,.form-field select{
+  width:100%;background:var(--bg-elevated);border:1px solid var(--border);border-radius:7px;
+  padding:8px 10px;color:var(--text);font-size:12.5px;outline:none;
+}
+.form-field input:focus,.form-field select:focus{border-color:var(--geofence)}
+.form-actions{display:flex;gap:8px;margin-top:12px}
+
+table{width:100%;border-collapse:collapse}
+th{
+  text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;
+  color:var(--text-faint);font-weight:600;padding:0 10px 10px;border-bottom:1px solid var(--border);
+}
+td{padding:11px 10px;font-size:12.5px;border-bottom:1px solid var(--border-soft);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+
+/* ---------- Terminal log feed (signature element) ---------- */
+.terminal{
+  background:#080a0d;border:1px solid var(--border);border-radius:10px;
+  font-family:var(--font-mono);font-size:12px;overflow:hidden;
+}
+.terminal-head{
+  display:flex;align-items:center;gap:6px;padding:9px 14px;border-bottom:1px solid var(--border-soft);
+  color:var(--text-faint);font-size:10.5px;letter-spacing:.04em;
+}
+.terminal-head .tdot{width:8px;height:8px;border-radius:50%}
+.terminal-body{max-height:560px;overflow-y:auto;padding:6px 0}
+.log-line{
+  display:flex;gap:10px;padding:8px 14px;border-bottom:1px solid #10131a;align-items:baseline;
+}
+.log-line:hover{background:#0d1015}
+.log-time{color:var(--text-faint);flex-shrink:0;width:78px}
+.log-method{flex-shrink:0;width:64px;font-weight:600;text-transform:uppercase;font-size:10.5px}
+.log-result{flex-shrink:0;width:64px;font-weight:600;text-transform:uppercase;font-size:10.5px}
+.log-note{color:var(--text-dim);flex:1;min-width:0}
+.res-success{color:var(--success)}
+.res-failed,.res-denied,.res-timeout{color:var(--danger)}
+.res-pending{color:var(--warning)}
+
+/* ---------- Toast ---------- */
+#toast-wrap{position:fixed;bottom:20px;right:20px;display:flex;flex-direction:column;gap:8px;z-index:999}
+.toast{
+  background:var(--panel);border:1px solid var(--border);border-radius:9px;padding:11px 16px;
+  font-size:12.5px;max-width:320px;box-shadow:0 8px 24px rgba(0,0,0,.4);
+  animation:slidein .2s ease;border-left:3px solid var(--geofence);
+}
+.toast.err{border-left-color:var(--danger)}
+.toast.ok{border-left-color:var(--success)}
+@keyframes slidein{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+.section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.section-head h2{font-family:var(--font-display);font-size:15px;font-weight:600}
+select.device-picker{
+  background:var(--panel);border:1px solid var(--border);color:var(--text);
+  padding:8px 12px;border-radius:8px;font-size:12.5px;outline:none;min-width:200px;
+}
+
+/* ---------- Leaflet map (geofence picker) ---------- */
+#geofence-map{
+  height:280px;border-radius:10px;overflow:hidden;margin-bottom:14px;
+  border:1px solid var(--border);background:var(--bg-elevated);
+}
+/* trik invert warna biar tile OSM yang terang ikut gelap, selaras tema */
+#geofence-map .leaflet-tile-pane{
+  filter:invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
+}
+.leaflet-control-attribution{
+  background:rgba(10,13,18,.75)!important;color:var(--text-faint)!important;font-size:9.5px!important;
+}
+.leaflet-control-attribution a{color:var(--text-dim)!important}
+.leaflet-control-zoom a{
+  background:var(--panel)!important;color:var(--text)!important;border-color:var(--border)!important;
+}
+.map-hint{font-size:11px;color:var(--text-faint);margin-bottom:10px;display:flex;align-items:center;gap:6px}
+
+/* ---------- QR Modal ---------- */
+#qr-modal-overlay{
+  display:none;position:fixed;inset:0;background:rgba(5,7,10,.7);z-index:900;
+  align-items:center;justify-content:center;padding:20px;
+}
+#qr-modal-overlay.active{display:flex}
+.qr-modal-box{
+  background:var(--panel);border:1px solid var(--border);border-radius:14px;
+  padding:26px;max-width:320px;width:100%;text-align:center;position:relative;
+}
+.qr-modal-close{
+  position:absolute;top:12px;right:12px;background:none;border:none;color:var(--text-faint);
+  font-size:18px;line-height:1;padding:4px;
+}
+.qr-modal-close:hover{color:var(--text)}
+#qr-code-box{
+  background:#fff;padding:14px;border-radius:10px;display:inline-flex;margin:14px 0;
+}
+.qr-modal-name{font-weight:600;font-size:14px;margin-top:4px}
+.qr-modal-link{
+  font-family:var(--font-mono);font-size:10.5px;color:var(--text-faint);word-break:break-all;
+  background:var(--bg-elevated);border-radius:6px;padding:8px 10px;margin-top:10px;
+}
+.qr-modal-pin{font-size:13px;margin-top:10px}
+.qr-modal-pin strong{color:var(--geofence);font-family:var(--font-mono);font-size:16px;letter-spacing:.05em}
+
+/* ---------- Chart panel ---------- */
+.chart-grid{display:grid;grid-template-columns:1.6fr 1fr;gap:14px;margin-bottom:16px}
+@media (max-width:800px){.chart-grid{grid-template-columns:1fr}}
+.chart-panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px}
+.chart-panel-title{font-size:12.5px;font-weight:600;color:var(--text-dim);margin-bottom:12px}
+.chart-canvas-wrap{position:relative;height:200px}
+
+/* ---------- SweetAlert2 override ---------- */
+.swal-dashboard-popup{font-family:var(--font-body)!important;border:1px solid var(--border)!important;border-radius:14px!important}
+
+/* ---------- Settings page ---------- */
+.theme-toggle-row{display:flex;align-items:center;justify-content:space-between;padding:6px 0}
+.theme-options{display:flex;gap:8px}
+.theme-btn{
+  display:flex;align-items:center;gap:8px;padding:10px 16px;border-radius:9px;
+  border:1px solid var(--border);background:var(--bg-elevated);color:var(--text-dim);
+  font-size:12.5px;font-weight:600;transition:.15s;
+}
+.theme-btn.active{border-color:var(--geofence);color:var(--geofence);background:rgba(79,209,197,.08)}
+.theme-btn:hover:not(.active){border-color:var(--text-faint)}
+.account-row{display:flex;align-items:center;gap:14px;padding:6px 0}
+.account-avatar-lg{
+  width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,var(--geofence),var(--face));
+  display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:700;color:#04211e;flex-shrink:0;
+}
+.info-row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border-soft);font-size:12.5px}
+.info-row:last-child{border-bottom:none}
+.info-row span:first-child{color:var(--text-faint)}
+
+
+/* ---------- Schedule redesign ---------- */
+.schedule-intro{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:16px}
+.schedule-intro-title{font-family:var(--font-display);font-size:16px;font-weight:700;margin-bottom:5px}
+.schedule-intro-desc{font-size:12px;line-height:1.6;color:var(--text-dim);max-width:760px}
+.schedule-panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:18px}
+.schedule-form-grid{display:grid;grid-template-columns:minmax(240px,1.5fr) minmax(190px,1fr);gap:12px}
+.schedule-form-grid .form-row{margin-bottom:0}
+.schedule-form-bottom{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:16px;flex-wrap:wrap}
+.schedule-stat-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:0 0 16px}
+.schedule-stat{background:var(--panel);border:1px solid var(--border);border-radius:11px;padding:14px 16px;min-width:0}
+.schedule-stat-label{font-size:11px;color:var(--text-dim);margin-bottom:7px}
+.schedule-stat-value{font-family:var(--font-display);font-size:23px;line-height:1.15;font-weight:700}
+.schedule-stat-note{font-size:10.5px;color:var(--text-faint);margin-top:5px}
+.schedule-toolbar{display:grid;grid-template-columns:minmax(220px,1.5fr) repeat(3,minmax(145px,1fr));gap:10px;margin:0 0 12px}
+.schedule-toolbar input,.schedule-toolbar select{width:100%;background:var(--panel);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:10px 12px;font:12px var(--font-body);outline:none}
+.schedule-toolbar input:focus,.schedule-toolbar select:focus{border-color:var(--geofence)}
+.schedule-list{display:grid;gap:10px}
+.schedule-card{display:grid;grid-template-columns:138px minmax(0,1fr) auto;gap:18px;align-items:stretch;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px;transition:border-color .15s,transform .15s}
+.schedule-card:hover{border-color:var(--text-faint)}
+.schedule-card-time{border-right:1px solid var(--border);padding-right:16px;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:6px}
+.schedule-day-badge{display:inline-flex;border-radius:6px;padding:4px 8px;background:rgba(79,209,197,.10);border:1px solid rgba(79,209,197,.24);color:var(--geofence);font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+.schedule-time-main{font-family:var(--font-mono);font-size:18px;font-weight:700;white-space:nowrap;letter-spacing:-.04em}
+.schedule-time-caption{font-size:10.5px;color:var(--text-faint)}
+.schedule-course-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:5px}
+.schedule-course-code{font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--text-dim);background:var(--panel-2);border:1px solid var(--border);border-radius:5px;padding:4px 7px}
+.schedule-period-badge{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--border);border-radius:99px;padding:4px 8px;font-size:10px;font-weight:700;white-space:nowrap}
+.schedule-period-badge.active{color:var(--success);border-color:rgba(74,222,128,.26);background:rgba(74,222,128,.08)}
+.schedule-period-badge.inactive{color:var(--danger);border-color:rgba(248,113,113,.24);background:rgba(248,113,113,.06)}
+.schedule-course-name{font-size:15px;font-weight:700;line-height:1.35;margin-bottom:10px}
+.schedule-meta-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px 14px}
+.schedule-meta-item{min-width:0}
+.schedule-meta-label{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint);margin-bottom:4px}
+.schedule-meta-value{font-size:12px;color:var(--text);line-height:1.45;overflow-wrap:anywhere}
+.schedule-period-detail{font-size:11px;color:var(--text-dim);margin-top:11px;padding-top:9px;border-top:1px solid var(--border-soft);display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.schedule-card-actions{display:flex;align-items:flex-start;justify-content:flex-end}
+.schedule-filter-count{font-size:11px;color:var(--text-faint);margin:0 0 10px}
+.nfc-owner-select{min-height:36px}
+.nfc-actions{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap}
+.nfc-user-cell{min-width:180px}
+.nfc-user-status{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600}
+.nfc-owner-role{display:inline-block;margin-top:3px;border-radius:4px;border:1px solid var(--border);padding:2px 5px;color:var(--text-faint);font-size:9.5px;text-transform:uppercase;letter-spacing:.03em}
+@media(max-width:1050px){.schedule-toolbar{grid-template-columns:repeat(2,minmax(0,1fr))}.schedule-meta-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:720px){
+  .schedule-intro,.schedule-panel-head{flex-direction:column;align-items:stretch}
+  .schedule-form-grid{grid-template-columns:1fr}
+  .schedule-stat-grid{grid-template-columns:1fr 1fr}
+  .schedule-stat-grid .schedule-stat:last-child{grid-column:1/-1}
+  .schedule-toolbar{grid-template-columns:1fr}
+  .schedule-card{grid-template-columns:1fr;gap:12px}
+  .schedule-card-time{border-right:none;border-bottom:1px solid var(--border);padding:0 0 12px;display:grid;grid-template-columns:auto 1fr auto;align-items:center}
+  .schedule-time-main{font-size:16px}
+  .schedule-card-actions{justify-content:flex-start}
+  .schedule-meta-grid{grid-template-columns:1fr 1fr}
+  .nfc-actions{justify-content:flex-start}
+}
+
+
+/* ---------- Refined access dashboard ---------- */
+.overview-header{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;margin:6px 0 20px}
+.overview-header h2{font-family:var(--font-display);font-size:clamp(23px,2.5vw,31px);letter-spacing:-.04em;line-height:1.2;margin:5px 0 7px}
+.overview-header p{font-size:12.5px;color:var(--text-dim);line-height:1.5}
+.eyebrow,.feature-label{font-size:9px;font-weight:800;letter-spacing:.14em;color:var(--text-faint)}
+.overview-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px}
+.overview-metric{display:flex;align-items:center;gap:12px;padding:15px;background:var(--panel);border:1px solid var(--border);border-radius:13px;min-width:0;box-shadow:0 2px 8px rgba(15,23,42,.025)}
+.metric-symbol{width:42px;height:42px;display:flex;align-items:center;justify-content:center;border-radius:12px;flex-shrink:0;background:var(--panel-2)}
+.metric-symbol svg{width:20px;height:20px}.metric-symbol.mint{color:var(--geofence);background:rgba(13,133,119,.11)}.metric-symbol.green{color:var(--success);background:rgba(21,138,73,.10)}.metric-symbol.amber{color:var(--nfc);background:rgba(168,101,10,.10)}.metric-symbol.violet{color:var(--face);background:rgba(148,64,196,.10);font-size:24px}
+.overview-metric span{display:block;font-size:10.5px;color:var(--text-dim);margin-bottom:3px}.overview-metric strong{display:block;font-family:var(--font-display);font-size:23px;line-height:1.1;letter-spacing:-.04em}.overview-metric strong em{font-style:normal;font-size:12px;color:var(--text-faint);font-weight:500}.overview-metric small{display:block;font-size:9.5px;color:var(--text-faint);margin-top:5px;line-height:1.3}
+.overview-main-grid{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(270px,.85fr);gap:14px;margin-bottom:22px}
+.overview-feature{background:linear-gradient(130deg,var(--panel) 0%,var(--bg-elevated) 100%);border:1px solid var(--border);border-radius:15px;padding:21px;min-width:0;box-shadow:0 2px 12px rgba(15,23,42,.03)}
+.feature-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.feature-top h3{font-family:var(--font-display);font-size:19px;letter-spacing:-.03em;margin:6px 0 3px}.feature-top p{font-size:11px;color:var(--text-faint)}
+.status-chip{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--border);border-radius:99px;padding:6px 9px;font-size:10px;color:var(--text-dim);white-space:nowrap;background:var(--bg-elevated)}.status-chip .dot{width:6px;height:6px}
+.lock-visual{display:flex;align-items:center;gap:16px;padding:23px 0 21px}.lock-visual-circle{width:76px;height:76px;border-radius:22px;background:rgba(13,133,119,.10);color:var(--geofence);display:flex;align-items:center;justify-content:center}.lock-visual-circle svg{width:37px;height:37px}.lock-visual span,.lock-visual small{display:block;color:var(--text-faint);font-size:10px}.lock-visual strong{display:block;font-family:var(--font-display);font-size:24px;text-transform:capitalize;letter-spacing:-.04em;margin:2px 0}.feature-footer{border-top:1px solid var(--border-soft);padding-top:16px;display:flex;align-items:center;justify-content:space-between;gap:10px}.feature-footer span{display:block;font-size:9px;color:var(--text-faint);letter-spacing:.12em;font-weight:700;margin-bottom:5px}.feature-footer strong{display:block;font-size:14px}.feature-footer small{display:block;color:var(--text-faint);font-size:10px;margin-top:4px}
+.overview-side{display:grid;grid-template-rows:1fr auto;gap:12px;min-width:0}.overview-side-panel{margin:0;padding:18px}.side-title-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}.side-title-row h3{font-family:var(--font-display);font-size:16px;margin-top:4px}.policy-mark{display:flex;align-items:center;justify-content:center;width:29px;height:29px;border-radius:9px;background:rgba(21,138,73,.1);color:var(--success);font-weight:800}.policy-row{display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid var(--border-soft)}.policy-row:last-of-type{border-bottom:0}.policy-dot{width:8px;height:8px;border-radius:50%;margin-top:4px;flex-shrink:0}.mint-dot{background:var(--geofence)}.violet-dot{background:var(--face)}.amber-dot{background:var(--nfc)}.green-dot{background:var(--success)}.policy-row strong{display:block;font-size:11px}.policy-row small{display:block;color:var(--text-faint);font-size:10px;margin-top:3px}.policy-button{width:100%;margin-top:12px}.overview-note{display:flex;align-items:flex-start;gap:10px;border:1px solid rgba(13,133,119,.18);background:rgba(13,133,119,.045);border-radius:12px;padding:13px}.note-icon{width:21px;height:21px;display:flex;align-items:center;justify-content:center;border-radius:7px;background:rgba(13,133,119,.11);color:var(--geofence);font-weight:800;flex-shrink:0}.overview-note p{font-size:10px;line-height:1.55;color:var(--text-dim)}.overview-note strong{color:var(--text);font-size:10.5px}
+.overview-section-title{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin:5px 0 12px}.overview-section-title h3{font-family:var(--font-display);font-size:17px;letter-spacing:-.02em}.overview-section-title p{font-size:11px;color:var(--text-faint);margin-top:4px}.overview-section-title>span{font-size:10px;color:var(--text-faint);border:1px solid var(--border);border-radius:99px;padding:5px 9px}
+.overview-device-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.overview-device-card{min-width:0;text-align:left;background:var(--panel);border:1px solid var(--border);border-radius:13px;padding:15px;color:var(--text);transition:border-color .15s,box-shadow .15s,transform .15s}.overview-device-card:hover,.overview-device-card.selected{border-color:var(--geofence);box-shadow:0 6px 18px rgba(15,23,42,.055);transform:translateY(-1px)}.overview-device-top{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:13px}.device-glyph{width:37px;height:37px;border-radius:11px;display:flex;align-items:center;justify-content:center;background:var(--panel-2);color:var(--geofence)}.device-glyph svg{width:19px;height:19px}.overview-device-name{font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.overview-device-code{font-family:var(--font-mono);font-size:10px;color:var(--text-faint);margin-top:4px}.overview-device-state{display:flex;gap:12px;font-size:10px;color:var(--text-dim);margin:12px 0 10px;flex-wrap:wrap}.overview-device-state span{display:flex;align-items:center;gap:5px;text-transform:capitalize}.overview-device-state svg{width:13px;height:13px}.overview-device-window{border-top:1px solid var(--border-soft);padding-top:10px;font-size:11px;font-weight:700;margin-bottom:10px}.overview-device-card .verif-row{margin-top:0;gap:4px}.overview-device-card .pill{font-size:9px;padding:3px 7px}
+.overview-empty{display:flex;flex-direction:column;align-items:center;text-align:center;background:var(--panel);border:1px dashed var(--border);border-radius:15px;padding:55px 20px;margin-top:8px}.overview-empty svg{width:38px;height:38px;color:var(--text-faint);margin-bottom:12px}.overview-empty h3{font-family:var(--font-display);font-size:17px}.overview-empty p{font-size:12px;color:var(--text-faint);margin-top:5px;max-width:360px}
+.access-window-toggle{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:11px 0}.access-window-toggle strong{font-size:12px}.access-window-toggle .hint{margin-top:3px}.access-window-times{margin-bottom:2px}.access-window-summary{display:flex;gap:11px;align-items:flex-start;background:var(--bg-elevated);border:1px solid var(--border);border-radius:10px;padding:13px}.access-window-summary strong{font-size:14px}.window-icon{font-size:24px;color:var(--geofence)}.permission-override-toggle{padding:10px 0 2px;margin-top:3px;border-top:1px solid var(--border-soft)}
+@media(max-width:1100px){.overview-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.overview-main-grid{grid-template-columns:1fr}.overview-device-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){.overview-header{align-items:flex-start;flex-direction:column}.overview-metrics{gap:8px}.overview-metric{padding:12px;gap:8px}.metric-symbol{width:34px;height:34px}.overview-metric strong{font-size:20px}.overview-device-grid{grid-template-columns:1fr}.feature-footer{align-items:flex-start;flex-direction:column}.feature-footer .btn{width:100%!important}.overview-section-title{align-items:flex-start;flex-direction:column}}
+
+
+/* Login polish: readable autofill text on mobile browsers and compact responsive layout. */
+.login-card .field input,
+.login-card .field input:focus { color:#f3f6fc; caret-color:#4fd1c5; }
+.login-card .field input::placeholder { color:#98a4b8; opacity:1; }
+.login-card .field input:-webkit-autofill,
+.login-card .field input:-webkit-autofill:hover,
+.login-card .field input:-webkit-autofill:focus,
+.login-card .field input:-webkit-autofill:active {
+  -webkit-text-fill-color:#f3f6fc !important;
+  caret-color:#f3f6fc;
+  -webkit-box-shadow:0 0 0 1000px #101722 inset !important;
+  box-shadow:0 0 0 1000px #101722 inset !important;
+  border:1px solid #344154; transition:background-color 99999s ease-out 0s;
+}
+.login-card .field input:-moz-autofill {
+  box-shadow:0 0 0 1000px #101722 inset;
+  -moz-text-fill-color:#f3f6fc;
+}
+@media (max-width:600px) {
+  #login-screen { min-height:100vh; min-height:100svh; align-items:flex-start; padding:24px 14px; overflow-y:auto; }
+  .login-card { max-width:460px; padding:26px 22px 24px; border-radius:18px; margin:auto 0; }
+  .login-heading { font-size:23px; }
+  .login-lead { margin-bottom:20px; }
+  .login-card .field label { color:#c1cad8; }
+  .login-card .field input { font-size:16px; min-height:48px; }
+  .google-login-btn { min-height:48px; }
+  .login-footnote { line-height:1.6; }
+}
+/* ---------- Mobile shell: reuse desktop tokens, icons and API components ---------- */
+.mobile-only,#mobile-nav,#drawer-backdrop,#portrait-overlay{display:none}
+button:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--geofence);outline-offset:3px}
+#portrait-overlay{position:fixed;inset:0;z-index:100000;min-height:100dvh;background:var(--bg);color:var(--text);align-items:center;justify-content:center;text-align:center;padding:24px;flex-direction:column;gap:20px}
+#portrait-overlay p{max-width:440px;font-size:16px;line-height:1.65}
+.rotate-phone{width:64px;height:64px;color:var(--geofence);animation:portrait-turn 2.4s ease-in-out infinite}
+@keyframes portrait-turn{0%,20%{transform:rotate(90deg)}60%,100%{transform:rotate(0)}}
+@media (prefers-reduced-motion:reduce){.rotate-phone{animation:none}}
+body.portrait-blocked{overflow:hidden}
+body.portrait-blocked #app-root{display:none}
+body.portrait-blocked #portrait-overlay{display:flex}
+html.is-mobile body{min-height:100svh;overflow-x:hidden}
+html.is-mobile #shell{min-height:100svh}
+html.is-mobile #main{width:100%;min-width:0}
+html.is-mobile #topbar{position:sticky;top:0;z-index:30;height:auto;min-height:68px;padding:calc(10px + env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) 10px max(16px,env(safe-area-inset-left));background:var(--bg-elevated);gap:12px}
+html.is-mobile #page-sub{max-width:66vw;line-height:1.5}
+html.is-mobile #page-content{padding:18px max(16px,env(safe-area-inset-right)) calc(96px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));overflow:visible}
+html.is-mobile .mobile-only{display:flex}
+.mobile-icon-btn{align-items:center;justify-content:center;width:44px;height:44px;flex-shrink:0;color:var(--text);background:var(--panel-2);border:1px solid var(--border);border-radius:12px}
+.mobile-icon-btn svg{width:22px;height:22px}
+html.is-mobile #mobile-nav{position:fixed;inset:auto 0 0;z-index:40;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;padding:8px max(8px,env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left));background:var(--bg-elevated);border-top:1px solid var(--border);box-shadow:0 -4px 24px rgba(0,0,0,.08)}
+html.is-mobile #mobile-nav .nav-item{min-height:52px;min-width:44px;flex-direction:column;justify-content:center;gap:5px;font-size:10px;padding:6px 2px;margin:0;text-align:center;border-radius:10px}
+html.is-mobile #mobile-nav .nav-ico{width:21px;height:21px}
+html.is-mobile #mobile-nav .active{color:var(--geofence);background:var(--panel-2)}
+html.is-mobile #shell:not(.active) ~ #mobile-nav{display:none}
+html.is-mobile #sidebar{position:fixed;left:0;top:0;z-index:70;width:min(320px,86vw);height:100dvh;padding:calc(16px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));transform:translateX(-105%);visibility:hidden;transition:transform .25s ease,visibility .25s;overflow-y:auto;overscroll-behavior:contain}
+html.is-mobile .drawer-open #sidebar{transform:translateX(0);visibility:visible}
+html.is-mobile #drawer-backdrop{display:block;position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.55);opacity:0;visibility:hidden;transition:opacity .25s,visibility .25s}
+html.is-mobile .drawer-open #drawer-backdrop{opacity:1;visibility:visible}
+html.is-mobile body.drawer-open{overflow:hidden}
+html.is-mobile #sidebar .brand{margin-bottom:8px;gap:8px}
+html.is-mobile #drawer-close{margin-left:auto}
+html.is-mobile #sidebar .nav-group{margin-top:12px}
+html.is-mobile #sidebar .nav-item{min-height:48px}
+html.is-mobile #sidebar .nav-item[data-page="overview"],html.is-mobile #sidebar .nav-item[data-page="devices"],html.is-mobile #sidebar .nav-item[data-page="logs"],html.is-mobile #sidebar .nav-label:first-child{display:none}
+html.is-mobile button,html.is-mobile .btn,html.is-mobile select,html.is-mobile input:not([type="checkbox"]):not([type="radio"]){min-height:44px;min-width:44px;touch-action:manipulation}
+html.is-mobile input:not([type="checkbox"]):not([type="radio"]),html.is-mobile select,html.is-mobile textarea{font-size:16px!important;max-width:100%}
+html.is-mobile .two-col,html.is-mobile .chart-grid,html.is-mobile .overview-main-grid,html.is-mobile .schedule-form-grid{grid-template-columns:minmax(0,1fr)}
+html.is-mobile .panel,html.is-mobile .chart-panel{min-width:0;padding:16px}
+html.is-mobile .form-row,html.is-mobile .form-row.three,html.is-mobile .schedule-toolbar{grid-template-columns:minmax(0,1fr)}
+html.is-mobile .form-actions{flex-wrap:wrap}
+html.is-mobile .form-actions .btn{flex:1 1 140px}
+html.is-mobile .overview-header,html.is-mobile .overview-section-title,html.is-mobile .feature-footer{align-items:flex-start;flex-direction:column;gap:12px}
+html.is-mobile .overview-header .btn,html.is-mobile .feature-footer .btn{width:100%!important}
+html.is-mobile .feature-footer .btn span{display:inline;color:inherit;font-size:inherit;letter-spacing:normal;margin:0}
+html.is-mobile .feature-top{flex-wrap:wrap;gap:12px}
+html.is-mobile .overview-metrics,html.is-mobile .overview-device-grid,html.is-mobile .schedule-stat-grid,html.is-mobile .grid,html.is-mobile .device-picker{display:grid;grid-auto-flow:column;grid-template-columns:none;grid-auto-columns:86%;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;scroll-padding-inline:2px;padding:2px 2px 12px;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+html.is-mobile .overview-metrics{grid-auto-flow:row;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-columns:auto;gap:8px;overflow:visible;scroll-snap-type:none;padding:0}
+html.is-mobile .overview-metrics .overview-metric{flex-direction:column;align-items:flex-start;gap:9px;padding:14px;overflow-wrap:anywhere}
+html.is-mobile .overview-metrics .overview-metric>div:last-child{min-width:0}
+html.is-mobile .overview-metrics>*,html.is-mobile .overview-device-grid>*,html.is-mobile .schedule-stat-grid>*,html.is-mobile .grid>*,html.is-mobile .device-picker>*{scroll-snap-align:start;min-width:0;grid-column:auto}
+html.is-mobile .device-picker{grid-auto-columns:78%;margin-bottom:0}
+html.is-mobile .device-list-item{min-height:60px;margin:0}
+.device-picker .device-list-item{width:100%;text-align:left;font-family:inherit;color:var(--text);background:transparent}
+.device-picker .device-list-item:hover,.device-picker .device-list-item.active{background:var(--panel-2)}
+html.is-mobile .log-line{flex-wrap:wrap;gap:8px}
+html.is-mobile .log-note{flex-basis:100%;overflow-wrap:anywhere}
+html.is-mobile .switch{width:48px;height:44px;display:inline-block}
+html.is-mobile .switch .slider{inset:11px 5px 12px}
+html.is-mobile .switch input:focus-visible + .slider{outline:2px solid var(--geofence);outline-offset:4px}
+html.is-mobile .toggle-row{gap:12px}
+html.is-mobile .mobile-table-scroll{max-width:100%;overflow-x:auto;overscroll-behavior-x:contain}
+html.is-mobile .mobile-table-scroll table{min-width:580px}
+html.is-mobile .info-row{gap:12px;flex-wrap:wrap;overflow-wrap:anywhere}
+html.is-mobile .section-head{flex-wrap:wrap;gap:12px}
+html.is-mobile .form-field{min-width:0}
+html.is-mobile .form-field input{min-width:0}
+html.is-mobile #toast-wrap{bottom:calc(86px + env(safe-area-inset-bottom));right:16px;left:16px;pointer-events:none}
+html.is-mobile .toast{max-width:100%}
+html.is-mobile .qr-modal-box{width:min(92vw,380px);max-height:85dvh;overflow:auto;padding:24px 16px}
+html.is-mobile .swal2-popup{max-width:calc(100vw - 24px);padding:20px 14px}
+html.is-mobile .swal2-actions{flex-wrap:wrap}
+@media (max-width:768px){
+  #page-title{font-size:17px}
+  .overview-header h2{font-size:24px}
+  .overview-metric{padding:16px}
+  .login-card{width:100%}
+}
+/* Physical mobile detection prevents this rule from blocking narrow desktop windows. */
+@media only screen and (max-width:932px) and (orientation:landscape){
+  html.is-phone #app-root{display:none}
+  html.is-phone #portrait-overlay{display:flex}
+}
+</style>
+<style>
+/* Appearance is a personal preference available to every role, including login. */
+.password-field{position:relative}
+.login-card .field input[aria-invalid="true"]{border-color:var(--danger)}
+.login-card .password-field input{padding-right:58px}
+.password-toggle{position:absolute;right:3px;top:50%;transform:translateY(-50%);display:flex;align-items:center;justify-content:center;width:44px;height:44px;min-height:44px;padding:10px;border:0;border-radius:8px;background:transparent;color:var(--text-dim);cursor:pointer}
+.password-toggle svg{width:21px;height:21px;pointer-events:none}
+.password-toggle:hover{color:var(--geofence)}
+.password-toggle:focus-visible{outline:2px solid var(--geofence);outline-offset:-3px}
+.password-toggle .eye-slash{display:none}
+.password-toggle[aria-pressed="true"] .eye-slash{display:block}
+.appearance-switch{display:inline-flex;gap:4px;padding:4px;border:1px solid var(--border);border-radius:12px;background:var(--panel)}
+.appearance-switch button{display:flex;align-items:center;justify-content:center;gap:6px;min-width:44px;min-height:44px;padding:8px 12px;border:0;border-radius:8px;background:transparent;color:var(--text-dim);font:600 12px var(--font-body)}
+.appearance-switch button[aria-pressed="true"]{background:var(--panel-2);color:var(--geofence);box-shadow:inset 0 0 0 1px var(--border)}
+.appearance-switch svg{width:18px;height:18px;flex-shrink:0}
+.appearance-switch button:focus-visible,.home-back:focus-visible{outline:2px solid var(--geofence);outline-offset:3px}
+.login-appearance{display:flex;justify-content:flex-end;margin-bottom:22px}
+.topbar-actions{display:flex;align-items:center;gap:10px}
+#topbar{height:auto;min-height:72px;gap:12px;padding-top:8px;padding-bottom:8px}
+#topbar>.topbar-heading{min-width:0;flex:1}
+.home-back{display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:8px 4px;background:transparent;border:0;border-radius:8px;color:var(--text-dim);font:600 12px var(--font-body)}
+.home-back:hover{color:var(--geofence)}
+.mobile-home-row{display:none}
+.mobile-home-row[hidden]{display:none!important}
+.home-back svg{width:20px;height:20px}
+.home-back[hidden]{display:none!important}
+body{color-scheme:dark}body.theme-light{color-scheme:light}
+body.theme-light #login-screen{background:radial-gradient(ellipse at top left,rgba(13,133,119,.09),transparent 55%),radial-gradient(ellipse at bottom right,rgba(148,64,196,.06),transparent 60%),var(--bg)}
+body.theme-light .login-card{background:var(--panel);box-shadow:0 18px 65px rgba(15,23,42,.1);border-color:var(--border)}
+body.theme-light .login-card .field label{color:var(--text-dim)}
+body.theme-light .login-card .field input{background:var(--bg-elevated);border-color:var(--border);color:var(--text);caret-color:var(--geofence)}
+body.theme-light .login-card .field input::placeholder{color:var(--text-faint)}
+body.theme-light .login-card .tab-switch{background:var(--bg)}
+body.theme-light .login-card .tab-btn.active{background:var(--panel);color:var(--geofence);box-shadow:0 1px 4px rgba(15,23,42,.1)}
+body.theme-light .google-note{color:var(--warning)}
+body.theme-light .login-card .field input:-webkit-autofill{ -webkit-text-fill-color:var(--text)!important;caret-color:var(--text);-webkit-box-shadow:0 0 0 1000px #fff inset!important;box-shadow:0 0 0 1000px #fff inset!important;border-color:var(--border)}
+body.theme-light .login-card .field input:-moz-autofill{box-shadow:0 0 0 1000px #fff inset;color:var(--text);-moz-text-fill-color:var(--text)}
+html.is-mobile #topbar{flex-wrap:wrap;gap:8px}
+html.is-mobile #page-sub{font-size:10px}
+html.is-mobile .topbar-actions{gap:6px}
+html.is-mobile .topbar-actions .appearance-switch button{padding:8px}
+html.is-mobile .topbar-actions .appearance-switch span{display:none}
+html.is-mobile .mobile-home-row:not([hidden]){display:flex;flex-basis:100%;order:3}
+</style>
+<link rel="stylesheet" href="/dashboard-assets/user-portal.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sweetalert2/11.14.0/sweetalert2.all.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/themes/dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.js"></script>
+</head>
+<body>
+<div id="app-root">
+
+<!-- ============ LOGIN ============ -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-appearance" data-appearance-switch></div>
+    <div class="brand">
+      <div class="brand-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#4fd1c5" stroke-width="2"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+      </div>
+      <div>
+        <div class="brand-text">Smartlock</div>
+        <div class="brand-sub">Access Console</div>
+      </div>
+    </div>
+
+    <h1 class="login-heading">Selamat datang kembali</h1>
+    <p class="login-lead">Masuk ke konsol keamanan untuk mengelola perangkat dan memantau akses pintu.</p>
+
+    <div id="auth-error" class="login-error"></div>
+    <div id="auth-success" class="login-error" style="background:rgba(74,222,128,.08);border-color:rgba(74,222,128,.35);color:var(--success)"></div>
+
+    <!-- API base diset otomatis dari origin website; tidak perlu ditampilkan kepada pengguna. -->
+    <input id="api-base" type="hidden" value="http://127.0.0.1:8000">
+
+    <div class="divider"></div>
+
+    <div class="tab-switch">
+      <button id="tab-login-btn" class="tab-btn active" onclick="switchAuthTab('login')">Masuk</button>
+      <button id="tab-register-btn" class="tab-btn" onclick="switchAuthTab('register')">Daftar Akun</button>
+    </div>
+
+    <!-- ---- LOGIN FORM ---- -->
+    <div id="login-form">
+      <div id="google-signin-official" class="google-signin-official" style="display:none"></div>
+      <button id="google-login-btn" type="button" class="google-login-btn">
+        <svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" transform="translate(0 4)"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.76 7.18l7.73 6C44.42 38.03 46.98 31.9 46.98 24.55z"/><path fill="#FBBC05" d="M10.53 28.59A14.4 14.4 0 0 1 9.75 24c0-1.59.27-3.13.76-4.59l-7.98-6.19A23.9 23.9 0 0 0 0 24c0 3.87.93 7.52 2.56 10.78l7.97-6.19z" transform="translate(1 0)"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.9-5.8l-7.73-6c-2.14 1.44-4.88 2.3-8.17 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" transform="translate(0 -1)"/></svg>
+        Lanjutkan dengan Google
+      </button>
+      <div id="google-login-note" class="google-note" style="display:block">Memeriksa ketersediaan login Google… Anda juga bisa masuk dengan email.</div>
+      <div class="auth-or">atau masuk dengan email</div>
+      <div class="field">
+        <label for="login-email">Email</label>
+        <input id="login-email" type="email" placeholder="Masukkan email Anda" autocomplete="username">
+      </div>
+      <div class="field">
+        <label for="login-password">Password</label>
+        <div class="password-field"><input id="login-password" type="password" placeholder="Masukkan Password Anda" autocomplete="current-password"><button id="toggle-login-password" class="password-toggle" type="button" data-password-target="login-password" aria-controls="login-password" aria-label="Tampilkan password" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/><path class="eye-slash" d="m3 3 18 18"/></svg></button></div>
+      </div>
+      <button id="login-btn" class="btn btn-primary">Masuk</button>
+    </div>
+
+    <!-- ---- REGISTER FORM ---- -->
+    <div id="register-form" style="display:none">
+      <div class="field">
+        <label for="register-name">Nama</label>
+        <input id="register-name" type="text" placeholder="Masukkan nama Anda" autocomplete="name">
+      </div>
+      <div class="field">
+        <label for="register-email">Email</label>
+        <input id="register-email" type="email" placeholder="Masukkan email Anda" autocomplete="username">
+      </div>
+      <div class="field">
+        <label for="register-password">Password</label>
+        <div class="password-field"><input id="register-password" type="password" placeholder="Minimal 6 karakter" autocomplete="new-password" aria-describedby="register-password-guide register-password-error"><button id="toggle-register-password" class="password-toggle" type="button" data-password-target="register-password" aria-controls="register-password" aria-label="Tampilkan password" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/><path class="eye-slash" d="m3 3 18 18"/></svg></button></div>
+        <p class="hint" id="register-password-guide">Wajib minimal 6 karakter, termasuk setidaknya 1 huruf besar (A–Z), 1 huruf kecil (a–z), dan 1 angka (0–9).</p>
+        <p class="hint" id="register-password-error" role="status" aria-live="polite" style="color:var(--danger)" hidden></p>
+        <div class="hint">Akun pertama yang daftar di sistem otomatis jadi <strong>owner</strong>. Selebihnya jadi role <strong>user</strong> biasa (butuh di-grant akses oleh owner).</div>
+      </div>
+      <button id="register-btn" class="btn btn-primary">Daftar</button>
+    </div>
+  </div>
+  <aside class="webapp-qr-card" aria-labelledby="webapp-qr-card-title">
+    <div class="webapp-qr-symbol" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM19 14h2v2h-2zM19 19h2v2h-2zM14 19h2v2h-2z"/></svg>
+    </div>
+    <h2 id="webapp-qr-card-title">Buka Smart Lock di HP</h2>
+    <p>Pindai QR Code ini menggunakan kamera HP untuk membuka halaman Web App pada alamat yang sama.</p>
+    <div class="webapp-qr-code" id="webapp-qr-code" aria-label="QR Code menuju Web App Smart Lock"></div>
+    <code class="webapp-qr-url" id="webapp-qr-url">Menyiapkan alamat Web App…</code>
+    <p class="webapp-qr-note" id="webapp-qr-note">Pastikan alamat ini dapat diakses dari HP.</p>
+  </aside>
+</div>
+
+<!-- ============ SHELL ============ -->
+<div id="shell">
+  <aside id="sidebar">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#4fd1c5" stroke-width="2"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+      </div>
+      <div>
+        <div class="brand-text">Smartlock</div>
+        <div class="brand-sub">Access Console</div>
+      </div>
+    </div>
+
+    <nav class="nav-group" id="nav-group">
+      <div class="nav-label">Monitor</div>
+      <button class="nav-item" data-page="overview">
+        <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+        Overview
+      </button>
+      <button class="nav-item" data-page="devices">
+        <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+        Devices
+      </button>
+      <button class="nav-item" data-page="logs">
+        <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h8M8 17h4"/></svg>
+        Access Logs
+      </button>
+      <div class="nav-label" style="margin-top:18px">Kelola</div>
+      <button class="nav-item owner-only" data-page="permissions">
+        <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.5"/><path d="M2 20c0-3.5 3-6 7-6s7 2.5 7 6"/><path d="M17 8h5M17 11h5"/></svg>
+        Permissions
+      </button>
+      <button class="nav-item owner-only" data-page="nfc">
+        <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 11a2 2 0 1 1 4 0"/></svg>
+        Kartu NFC
+      </button>
+      <button class="nav-item owner-only" data-page="guest">
+        <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="6" height="6"/><rect x="14" y="4" width="6" height="6"/><rect x="4" y="14" width="6" height="6"/><path d="M14 14h3v3h-3zM19 14v6M14 19h6"/></svg>
+        Akses Tamu
+      </button>
+      <div class="nav-label" style="margin-top:18px">Lainnya</div>
+      <button class="nav-item" data-page="settings">
+        <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Pengaturan
+      </button>
+    </nav>
+
+    <div class="sidebar-foot">
+      <div class="conn-pill">
+        <span class="dot on"></span>
+        <span class="url" id="conn-url">—</span>
+      </div>
+      <div class="user-row">
+        <div class="user-avatar" id="user-avatar">?</div>
+        <div class="user-info">
+          <div class="user-name" id="user-name">—</div>
+          <div class="user-role" id="user-role">—</div>
+        </div>
+        <button class="logout-btn" id="logout-btn" title="Keluar">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <div id="main">
+    <div id="topbar">
+      <div class="topbar-heading">
+        <div id="page-title">Overview</div>
+        <div id="page-sub">Ringkasan semua device</div>
+      </div>
+      <div class="topbar-actions"><button class="webapp-qr-trigger" id="webapp-qr-open" type="button" aria-haspopup="dialog" aria-controls="webapp-qr-overlay" title="Tampilkan QR untuk membuka Web App di HP"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM19 14h2v2h-2zM19 19h2v2h-2zM14 19h2v2h-2z"/></svg><span>QR HP</span></button><div data-appearance-switch></div><button class="mobile-only mobile-icon-btn" id="drawer-toggle" type="button" aria-label="Buka menu lainnya" aria-controls="sidebar" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button></div>
+      <div id="mobile-home-row" class="mobile-home-row" hidden><button id="mobile-home-back" class="home-back" type="button" onclick="goTo('overview')" aria-label="Kembali ke Beranda" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m12 5-7 7 7 7M5 12h14"/></svg>Beranda</button></div>
+    </div>
+    <div id="page-content"></div>
+  </div>
+</div>
+
+<nav id="mobile-nav" aria-label="Navigasi utama"></nav>
+<div id="drawer-backdrop" aria-hidden="true"></div>
+<div id="toast-wrap"></div>
+
+<div id="qr-modal-overlay" onclick="if(event.target===this) closeQrModal()">
+  <div class="qr-modal-box">
+    <button class="qr-modal-close" onclick="closeQrModal()">✕</button>
+    <div class="qr-modal-name" id="qr-modal-name">—</div>
+    <div id="qr-code-box"></div>
+    <div class="qr-modal-pin" id="qr-modal-pin"></div>
+    <div class="qr-modal-link" id="qr-modal-link">—</div>
+  </div>
+</div>
+
+<div id="webapp-qr-overlay" class="webapp-qr-overlay" hidden>
+  <section class="webapp-qr-dialog" role="dialog" aria-modal="true" aria-labelledby="webapp-qr-dialog-title" tabindex="-1">
+    <button class="webapp-qr-close" id="webapp-qr-close" type="button" aria-label="Tutup QR Code">×</button>
+    <div class="webapp-qr-symbol" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM19 14h2v2h-2zM19 19h2v2h-2zM14 19h2v2h-2z"/></svg>
+    </div>
+    <h2 id="webapp-qr-dialog-title">Buka Web App di HP</h2>
+    <p>Pindai QR Code untuk membuka halaman Smart Lock pada browser HP.</p>
+    <div class="webapp-qr-code" id="webapp-qr-dialog-code" aria-label="QR Code menuju Web App Smart Lock"></div>
+    <code class="webapp-qr-url" id="webapp-qr-dialog-url">—</code>
+    <p class="webapp-qr-note" id="webapp-qr-dialog-note">Pastikan alamat dapat diakses dari HP.</p>
+    <button class="webapp-qr-copy" id="webapp-qr-copy" type="button">Salin tautan Web App</button>
+  </section>
+</div>
+
+</div><!-- /app-root -->
+<div id="portrait-overlay" role="alert" aria-live="assertive" tabindex="-1" hidden>
+  <svg class="rotate-phone" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><rect x="18" y="6" width="28" height="52" rx="6"/><path d="M27 12h10M29 51h6M7 34a25 25 0 0 1 7-20M7 20v14h10"/></svg>
+  <p>Silakan putar kembali perangkat Anda ke posisi Portrait untuk menggunakan aplikasi ini.</p>
+</div>
+<script>
+/* Mobile navigation delegates to the existing router and keeps owner-only menus intact. */
+(function () {
+  const root = document.documentElement;
+  const appRoot = document.getElementById('app-root');
+  const sidebar = document.getElementById('sidebar');
+  const main = document.getElementById('main');
+  const nav = document.getElementById('mobile-nav');
+  const toggle = document.getElementById('drawer-toggle');
+  const overlay = document.getElementById('portrait-overlay');
+  const close = document.createElement('button');
+  close.id = 'drawer-close';
+  close.type = 'button';
+  close.className = 'mobile-only mobile-icon-btn';
+  close.setAttribute('aria-label', 'Tutup menu');
+  close.textContent = '✕';
+  sidebar.querySelector('.brand').append(close);
+  ['overview', 'devices', 'logs'].forEach(page => {
+    const button = sidebar.querySelector('[data-page="' + page + '"]').cloneNode(true);
+    button.removeAttribute('id');
+    nav.append(button);
+  });
+  const more = document.createElement('button');
+  more.type = 'button';
+  more.className = 'nav-item';
+  more.id = 'mobile-more';
+  more.innerHTML = '<svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>Lainnya';
+  more.setAttribute('aria-controls', 'sidebar');
+  more.setAttribute('aria-expanded', 'false');
+  nav.append(more);
+  let returnFocus = null;
+  window.setMobileDrawer = function (open) {
+    open = Boolean(open && root.classList.contains('is-mobile'));
+    if (open) returnFocus = document.activeElement;
+    // Restore focus before applying inert to the drawer.
+    if (!open && sidebar.contains(document.activeElement) && returnFocus) returnFocus.focus();
+    document.body.classList.toggle('drawer-open', open);
+    toggle.setAttribute('aria-expanded', String(open));
+    more.setAttribute('aria-expanded', String(open));
+    sidebar.inert = root.classList.contains('is-mobile') && !open;
+    main.inert = open;
+    nav.inert = open;
+    if (open) {
+      sidebar.setAttribute('role', 'dialog');
+      sidebar.setAttribute('aria-modal', 'true');
+      sidebar.setAttribute('aria-label', 'Menu lainnya');
+      close.focus();
+    } else {
+      sidebar.removeAttribute('role');
+      sidebar.removeAttribute('aria-modal');
+      sidebar.removeAttribute('aria-label');
+    }
+  };
+  [toggle, more].forEach(button => button.addEventListener('click', () => setMobileDrawer(true)));
+  close.addEventListener('click', () => setMobileDrawer(false));
+  document.getElementById('drawer-backdrop').addEventListener('click', () => setMobileDrawer(false));
+  document.addEventListener('keydown', event => {
+    if (!document.body.classList.contains('drawer-open')) return;
+    if (event.key === 'Escape') setMobileDrawer(false);
+    if (event.key !== 'Tab') return;
+    const items = [...sidebar.querySelectorAll('button, a, input, [tabindex="0"]')].filter(el => el.getClientRects().length && !el.disabled);
+    const first = items[0], last = items[items.length - 1];
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+  });
+  let beforeRotation = null;
+  function updateLayout() {
+    const wasMobile = root.classList.contains('is-mobile');
+    syncSmartlockLayout();
+    root.classList.toggle('is-phone', window.smartlockPhone);
+    if (wasMobile !== root.classList.contains('is-mobile')) setMobileDrawer(false);
+    sidebar.inert = root.classList.contains('is-mobile') && !document.body.classList.contains('drawer-open');
+    // Screen orientation avoids treating the software keyboard as a device rotation.
+    const type = screen.orientation && screen.orientation.type;
+    const landscape = type ? type.startsWith('landscape') : typeof window.orientation === 'number' ? Math.abs(window.orientation) === 90 : matchMedia('(orientation: landscape)').matches;
+    const blocked = window.smartlockPhone && landscape;
+    if (blocked && !document.body.classList.contains('portrait-blocked')) {
+      beforeRotation = document.activeElement;
+      setMobileDrawer(false);
+    }
+    document.body.classList.toggle('portrait-blocked', blocked);
+    appRoot.inert = blocked;
+    overlay.hidden = !blocked;
+    if (blocked) overlay.focus({ preventScroll: true });
+    else if (beforeRotation) { if (beforeRotation.isConnected) beforeRotation.focus({ preventScroll: true }); beforeRotation = null; }
+  }
+  addEventListener('resize', updateLayout);
+  addEventListener('orientationchange', updateLayout);
+  if (screen.orientation) screen.orientation.addEventListener('change', updateLayout);
+  updateLayout();
+  // Supported browsers may require installed/fullscreen mode; the overlay remains the fallback.
+  async function tryPortraitLock() {
+    if (window.smartlockPhone && screen.orientation && typeof screen.orientation.lock === 'function') {
+      try { await screen.orientation.lock('portrait'); } catch (_) { /* Browser does not allow locking here. */ }
+    }
+  }
+  document.addEventListener('pointerdown', tryPortraitLock, { once: true });
+  document.addEventListener('fullscreenchange', tryPortraitLock);
+})();
+</script>
+<script src="/dashboard-assets/user-portal.js"></script>
+<script>
+/* ================= CONFIRM DIALOG (SweetAlert2, tema dashboard) ================= */
+function confirmDialog(title, text, confirmText = "Ya, lanjutkan", danger = true) {
+  return Swal.fire({
+    title, text,
+    icon: "warning",
+    background: getCssVar("--panel"),
+    color: getCssVar("--text"),
+    showCancelButton: true,
+    confirmButtonText: confirmText,
+    cancelButtonText: "Batal",
+    confirmButtonColor: danger ? getCssVar("--danger") : getCssVar("--geofence"),
+    cancelButtonColor: getCssVar("--border"),
+    reverseButtons: true,
+    customClass: { popup: "swal-dashboard-popup" },
+  }).then(r => r.isConfirmed);
+}
+function alertDialog(title, text, icon = "success") {
+  return Swal.fire({
+    title, text, icon,
+    background: getCssVar("--panel"),
+    color: getCssVar("--text"),
+    confirmButtonColor: getCssVar("--geofence"),
+  });
+}
+
+/* ================= STATE ================= */
+const state = {
+  apiBase: "",
+  token: null,
+  user: null,
+  devices: [],
+  selectedDeviceId: null,
+  currentPage: "overview",
+};
+
+/* ================= API HELPER ================= */
+async function api(path, { method = "GET", body = null, auth = true, signal } = {}) {
+  const headers = { "Accept": "application/json" };
+  if (body !== null) headers["Content-Type"] = "application/json";
+  if (auth && state.token) headers["Authorization"] = "Bearer " + state.token;
+
+  let res;
+  try {
+    res = await fetch(state.apiBase + path, {
+      signal,
+      method,
+      headers,
+      body: body !== null ? JSON.stringify(body) : undefined,
+    });
+  } catch (e) {
+    throw new Error("Gagal konek ke backend. Cek URL ngrok & pastikan backend/ngrok masih jalan.");
+  }
+
+  let data = null;
+  const text = await res.text();
+  try { data = text ? JSON.parse(text) : null; } catch (e) { /* not json */ }
+
+  if (!res.ok) {
+    const detail = (data && data.detail) ? data.detail : (res.status + " " + res.statusText);
+    throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+  }
+  return data;
+}
+
+/* ================= TOAST ================= */
+function toast(msg, type = "") {
+  const wrap = document.getElementById("toast-wrap");
+  const el = document.createElement("div");
+  el.className = "toast " + type;
+  el.textContent = msg;
+  wrap.appendChild(el);
+  setTimeout(() => el.remove(), 4200);
+}
+
+/* ================= SESSION PERSISTENCE (1 jam) ================= */
+const SESSION_KEY = "smartlock_session_v1";
+const SESSION_TTL_MS = 60 * 60 * 1000; // 1 jam
+
+function saveSession() {
+  try {
+    localStorage.setItem(SESSION_KEY, JSON.stringify({
+      apiBase: state.apiBase,
+      token: state.token,
+      user: state.user,
+      expiresAt: Date.now() + SESSION_TTL_MS,
+    }));
+  } catch (e) { /* localStorage gak tersedia (mis. preview in-chat) -- gak apa-apa, cukup skip persist */ }
+}
+function loadSession() {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw);
+    if (!s.expiresAt || Date.now() > s.expiresAt) { localStorage.removeItem(SESSION_KEY); return null; }
+    return s;
+  } catch (e) { return null; }
+}
+function clearSession() {
+  try { localStorage.removeItem(SESSION_KEY); } catch (e) {}
+}
+
+// Auto logout tepat pas sesi kedaluwarsa, kalau tab dibiarkan terbuka
+let sessionWatchTimer = null;
+function armSessionWatch() {
+  if (sessionWatchTimer) clearInterval(sessionWatchTimer);
+  sessionWatchTimer = setInterval(() => {
+    const s = loadSession();
+    if (!s && state.token) {
+      toast("Sesi sudah habis (1 jam). Silakan masuk lagi.", "err");
+      doLogout();
+    }
+  }, 30 * 1000);
+}
+
+// Coba pulihkan sesi begitu halaman dibuka
+// Kalau dashboard ini diakses langsung dari backend (bukan dibuka sebagai
+// file lokal), otomatis isi Backend URL dari alamat saat ini -- gak perlu
+// ngetik/ganti manual tiap kali URL ngrok berubah. Kalau dibuka via file://
+// (double-click file di komputer), tetap default ke localhost seperti biasa.
+/* ================= THEME (dark/light) ================= */
+const THEME_KEY = "smartlock_theme_v1";
+document.querySelectorAll('[data-appearance-switch]').forEach(host => {
+  host.innerHTML = `<div class="appearance-switch" role="group" aria-label="Pilih tema tampilan"><button type="button" data-theme="light" onclick="changeAppearance('light')" aria-label="Tema terang" title="Tema terang"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg><span>Terang</span></button><button type="button" data-theme="dark" onclick="changeAppearance('dark')" aria-label="Tema gelap" title="Tema gelap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M20.5 14A9 9 0 0 1 10 3.5 9 9 0 1 0 20.5 14Z"/></svg><span>Gelap</span></button></div>`;
+});
+function applyTheme(theme) {
+  theme = theme === 'dark' ? 'dark' : 'light';
+  document.body.classList.toggle("theme-light", theme === "light");
+  try { localStorage.setItem(THEME_KEY, theme); } catch (e) {}
+  state.theme = theme;
+  document.querySelectorAll('[data-theme]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.theme === theme)));
+}
+function changeAppearance(theme) {
+  applyTheme(theme);
+  // Keep the current page, form values and any pending request in place.
+  document.querySelectorAll('.theme-btn[data-setting-theme]').forEach(button => button.classList.toggle('active', button.dataset.settingTheme === state.theme));
+  if (typeof _logsTrendChart !== 'undefined') [_logsTrendChart, _logsResultChart].filter(chart => chart?.canvas?.isConnected).forEach(chart => {
+    chart.options.plugins.legend.labels.color = getCssVar('--text-dim');
+    Object.values(chart.options.scales || {}).forEach(scale => { if(scale.ticks) scale.ticks.color = getCssVar('--text-faint'); if(scale.grid) scale.grid.color = getCssVar('--border-soft'); });
+    chart.update('none');
+  });
+}
+function getCssVar(name) {
+  return getComputedStyle(document.body).getPropertyValue(name).trim();
+}
+(function loadThemeOnStart() {
+  let saved = null;
+  try { saved = localStorage.getItem(THEME_KEY); } catch (e) {}
+  applyTheme(saved === "dark" ? "dark" : "light"); // default terang, sesuai dashboard operasional
+})();
+
+(function autofillApiBaseFromLocation() {
+  if (window.location.protocol !== "file:") {
+    const guess = window.location.origin;
+    const input = document.getElementById("api-base");
+    if (input) input.value = guess;
+  }
+})();
+
+(function restoreSessionOnLoad() {
+  const s = loadSession();
+  if (s) {
+    state.apiBase = s.apiBase; state.token = s.token; state.user = s.user;
+    enterShell();
+    armSessionWatch();
+  }
+})();
+
+/* ================= LOGIN / REGISTER ================= */
+function setPasswordVisibility(button, visible) {
+  document.getElementById(button.dataset.passwordTarget).type = visible ? 'text' : 'password';
+  button.setAttribute('aria-pressed',String(visible));
+  button.setAttribute('aria-label',visible ? 'Sembunyikan password' : 'Tampilkan password');
+}
+document.querySelectorAll('[data-password-target]').forEach(button => {
+  button.addEventListener('click',()=>setPasswordVisibility(button,button.getAttribute('aria-pressed')!=='true'));
+});
+function registrationPasswordProblems(value) {
+  const missing=[];
+  if(Array.from(value).length<6)missing.push('minimal 6 karakter');
+  if(!/[A-Z]/.test(value))missing.push('1 huruf besar (A–Z)');
+  if(!/[a-z]/.test(value))missing.push('1 huruf kecil (a–z)');
+  if(!/[0-9]/.test(value))missing.push('1 angka (0–9)');
+  return missing;
+}
+function validateRegistrationPassword() {
+  const input=document.getElementById('register-password');
+  const missing=registrationPasswordProblems(input.value);
+  const error=document.getElementById('register-password-error');
+  error.hidden=!missing.length;
+  error.textContent=missing.length?'Password belum memenuhi syarat: '+missing.join(', ')+'.':'';
+  input.setAttribute('aria-invalid',String(Boolean(missing.length)));
+  return !missing.length;
+}
+document.getElementById('register-password').addEventListener('input',event=>{
+  if(event.target.hasAttribute('aria-invalid'))validateRegistrationPassword();
+});
+function switchAuthTab(tab) {
+  document.querySelectorAll('[data-password-target]').forEach(button=>setPasswordVisibility(button,false));
+  document.getElementById("tab-login-btn").classList.toggle("active", tab === "login");
+  document.getElementById("tab-register-btn").classList.toggle("active", tab === "register");
+  document.getElementById("login-form").style.display = tab === "login" ? "block" : "none";
+  document.getElementById("register-form").style.display = tab === "register" ? "block" : "none";
+  hideAuthMessages();
+}
+function hideAuthMessages() {
+  document.getElementById("auth-error").style.display = "none";
+  document.getElementById("auth-success").style.display = "none";
+}
+function showAuthError(msg) {
+  const box = document.getElementById("auth-error");
+  box.textContent = msg; box.style.display = "block";
+  document.getElementById("auth-success").style.display = "none";
+}
+function showAuthSuccess(msg) {
+  const box = document.getElementById("auth-success");
+  box.textContent = msg; box.style.display = "block";
+  document.getElementById("auth-error").style.display = "none";
+}
+
+document.getElementById("login-btn").addEventListener("click", doLogin);
+document.getElementById("login-password").addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
+document.getElementById("google-login-btn").addEventListener("click", () => {
+  const note = document.getElementById("google-login-note");
+  note.style.display = "block";
+  note.textContent = "Untuk masuk sekarang, gunakan email dan password di bawah. Belum punya akun? Pilih Daftar Akun.";
+});
+
+// Google Identity Services: the ID token is sent to FastAPI and verified server-side.
+async function handleGoogleCredential(response) {
+  hideAuthMessages();
+  if (!response || !response.credential) { showAuthError("Google tidak mengembalikan token login. Coba lagi."); return; }
+  const btn = document.getElementById("google-signin-official");
+  btn.style.opacity = "0.65"; btn.style.pointerEvents = "none";
+  try {
+    state.apiBase = getApiBase();
+    const res = await fetch(state.apiBase + "/auth/google", {
+      method: "POST", headers: {"Accept":"application/json", "Content-Type":"application/json"},
+      body: JSON.stringify({credential: response.credential})
+    });
+    const raw = await res.text(); let data = null;
+    try { data = raw ? JSON.parse(raw) : null; } catch (_) {}
+    if (!res.ok) { const detail = data && data.detail ? data.detail : (res.status + " " + res.statusText); throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail)); }
+    state.token = data.access_token; state.user = data.user; saveSession(); armSessionWatch(); enterShell();
+  } catch (e) { showAuthError(e.message || "Login Google gagal. Coba lagi."); }
+  finally { btn.style.opacity = "1"; btn.style.pointerEvents = "auto"; }
+}
+
+async function initGoogleLogin() {
+  const customButton = document.getElementById("google-login-btn");
+  const note = document.getElementById("google-login-note");
+  try {
+    const apiBase = getApiBase();
+    const configRes = await fetch(apiBase + "/auth/google/config", {headers:{"Accept":"application/json"}});
+    if (!configRes.ok) throw new Error("Konfigurasi Google tidak dapat dibaca.");
+    const config = await configRes.json();
+    if (!config.enabled || !config.client_id) {
+      customButton.style.display = "none"; note.style.display = "block";
+      note.textContent = "Login Google belum tersedia. Masuk dengan email dan password, pilih Daftar Akun.";
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = "https://accounts.google.com/gsi/client"; script.async = true; script.defer = true;
+    script.onload = () => {
+      if (!window.google || !google.accounts || !google.accounts.id) { note.style.display = "block"; note.textContent = "Library Google gagal dimuat. Periksa koneksi internet atau pemblokir script."; return; }
+      google.accounts.id.initialize({client_id: config.client_id, callback: handleGoogleCredential, auto_select: false, cancel_on_tap_outside: true});
+      google.accounts.id.renderButton(document.getElementById("google-signin-official"), {type:"standard", theme:"outline", size:"large", text:"continue_with", shape:"rectangular", width:365, logo_alignment:"left"});
+      document.getElementById("google-signin-official").style.display = "flex";
+      customButton.style.display = "none"; note.style.display = "none";
+    };
+    script.onerror = () => { note.style.display = "block"; note.textContent = "Tidak bisa memuat Google Sign-In. Periksa koneksi internet."; };
+    document.head.appendChild(script);
+  } catch (_) {
+    customButton.style.display = "none"; note.style.display = "block";
+    note.textContent = "Backend belum dapat dihubungi. Pastikan backend berjalan, lalu muat ulang halaman untuk masuk.";
+  }
+}
+window.addEventListener("load", initGoogleLogin);
+document.getElementById("register-btn").addEventListener("click", doRegister);
+document.getElementById("register-password").addEventListener("keydown", e => { if (e.key === "Enter") doRegister(); });
+
+function getApiBase() {
+  // Gunakan origin yang sedang dibuka: localhost saat lokal, URL HTTPS saat lewat ngrok/domain.
+  const input = document.getElementById("api-base");
+  const configured = input ? input.value.trim() : "";
+  const origin = window.location.protocol === "file:" ? "http://127.0.0.1:8000" : window.location.origin;
+  return (origin || configured || "http://127.0.0.1:8000").replace(/\/+$/, "");
+}
+
+async function doLogin() {
+  const apiBaseInput = getApiBase();
+  const email = document.getElementById("login-email").value.trim();
+  const password = document.getElementById("login-password").value;
+  hideAuthMessages();
+
+  if (!apiBaseInput || !email || !password) {
+    showAuthError("Isi email dan password terlebih dahulu.");
+    return;
+  }
+
+  state.apiBase = apiBaseInput;
+  const btn = document.getElementById("login-btn");
+  btn.disabled = true; btn.textContent = "Menghubungkan...";
+
+  try {
+    // PENTING: endpoint /auth/login backend pakai OAuth2PasswordRequestForm,
+    // jadi butuh form-urlencoded dengan field "username" (bukan JSON "email").
+    // Tidak bisa lewat helper api() biasa karena Content-Type-nya beda.
+    const form = new URLSearchParams();
+    form.set("username", email);
+    form.set("password", password);
+    const loginRes = await fetch(state.apiBase + "/auth/login", {
+      method: "POST",
+      headers: { "Accept": "application/json", "Content-Type": "application/x-www-form-urlencoded" },
+      body: form.toString(),
+    });
+    const loginText = await loginRes.text();
+    let loginData = null;
+    try { loginData = loginText ? JSON.parse(loginText) : null; } catch (e) {}
+    if (!loginRes.ok) {
+      const detail = (loginData && loginData.detail) ? loginData.detail : (loginRes.status + " " + loginRes.statusText);
+      throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+    }
+    state.token = loginData.access_token;
+    // Data user sekarang udah ikut dikirim di response login (poin fix ngrok+CORS),
+    // jadi gak perlu manggil GET /auth/me terpisah lagi -- itu yang dulu bermasalah
+    // pas diakses lewat ngrok (CORS anomali khusus GET+Authorization header).
+    state.user = loginData.user;
+    saveSession();
+    armSessionWatch();
+    enterShell();
+  } catch (e) {
+    showAuthError(e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = "Masuk";
+  }
+}
+
+async function doRegister() {
+  const apiBaseInput = getApiBase();
+  const name = document.getElementById("register-name").value.trim();
+  const email = document.getElementById("register-email").value.trim();
+  const password = document.getElementById("register-password").value;
+  hideAuthMessages();
+
+  if (!apiBaseInput || !name || !email || !password) {
+    showAuthError("Isi nama, email, dan password terlebih dahulu.");
+    return;
+  }
+  if (!validateRegistrationPassword()) {
+    showAuthError(document.getElementById('register-password-error').textContent);
+    document.getElementById('register-password').focus();
+    return;
+  }
+
+  state.apiBase = apiBaseInput;
+  const btn = document.getElementById("register-btn");
+  btn.disabled = true; btn.textContent = "Mendaftarkan...";
+
+  try {
+    // /auth/register pakai JSON biasa: { name, email, password }
+    await api("/auth/register", { method: "POST", body: { name, email, password }, auth: false });
+    document.getElementById("register-name").value = "";
+    document.getElementById("register-email").value = "";
+    document.getElementById("register-password").value = "";
+    document.getElementById('register-password').removeAttribute('aria-invalid');
+    document.getElementById('register-password-error').hidden=true;
+    document.getElementById('register-password-error').textContent='';
+    // pindah balik ke tab login, pre-fill email biar gak ngetik ulang
+    switchAuthTab("login");
+    document.getElementById("login-email").value = email;
+    showAuthSuccess("Akun berhasil dibuat! Silakan masuk.");
+  } catch (e) {
+    showAuthError(e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = "Daftar";
+  }
+}
+
+function enterShell() {
+  document.getElementById("login-screen").style.display = "none";
+  document.getElementById("shell").classList.add("active");
+  document.getElementById("conn-url").textContent = state.apiBase.replace(/^https?:\/\//, "");
+  document.getElementById("user-name").textContent = state.user.name;
+  document.getElementById("user-role").textContent = state.user.role;
+  document.getElementById("user-avatar").textContent = state.user.name.slice(0, 1).toUpperCase();
+
+  const isOwner = state.user.role === "owner";
+  document.body.classList.toggle('is-user', !isOwner);
+  const labels = isOwner ? {overview:'Overview',devices:'Devices',logs:'Access Logs',settings:'Pengaturan'} : {overview:'Beranda',devices:'Perangkat Saya',logs:'Riwayat Saya',settings:'Profil Saya'};
+  document.querySelectorAll('.nav-item[data-page]').forEach(button => {
+    if (labels[button.dataset.page]) {
+      const node = [...button.childNodes].reverse().find(n => n.nodeType === Node.TEXT_NODE);
+      if (node) node.textContent = labels[button.dataset.page];
+    }
+  });
+  document.querySelectorAll(".owner-only").forEach(el => el.style.display = isOwner ? "flex" : "none");
+
+  loadDevices().then(() => goTo("overview"));
+}
+
+document.getElementById("logout-btn").addEventListener("click", doLogout);
+function doLogout() {
+  document.querySelectorAll('[data-password-target]').forEach(button=>setPasswordVisibility(button,false));
+  UserPortal.reset();
+  if (window.FaceUnlock) FaceUnlock.close();
+  myUnlockPending.forEach(operation => operation.controller.abort());
+  myUnlockPending.clear();
+  setMobileDrawer(false);
+  state.token = null; state.user = null; state.devices = [];
+  state._allUsers = null; state.selectedDeviceId = null;
+  clearSession();
+  if (sessionWatchTimer) clearInterval(sessionWatchTimer);
+  document.getElementById("shell").classList.remove("active");
+  document.getElementById("login-screen").style.display = "flex";
+  document.getElementById("login-password").value = "";
+}
+
+/* ================= NAV / ROUTER ================= */
+document.querySelectorAll(".nav-item[data-page]").forEach(btn => {
+  btn.addEventListener("click", () => goTo(btn.dataset.page));
+});
+
+const PAGE_META = {
+  overview:    { title: "Overview", sub: "Ringkasan semua device" },
+  devices:     { title: "Devices", sub: "Pengaturan geofence, wajah, dan NFC per device" },
+  logs:        { title: "Access Logs", sub: "Riwayat percobaan unlock" },
+  permissions: { title: "Permissions", sub: "Kelola siapa yang boleh unlock device kamu" },
+  nfc:         { title: "Kartu NFC", sub: "Kartu/tag yang terdaftar untuk verifikasi NFC" },
+  guest:       { title: "Akses Tamu", sub: "QR + PIN sementara untuk tamu" },
+  settings:    { title: "Pengaturan", sub: "Tampilan dan info akun" },
+};
+
+function goTo(page) {
+  if (!state.user) return;
+  if (!PAGE_META[page]) return;
+  if (state.user?.role !== 'owner' && !['overview','devices','logs','nfc','settings'].includes(page)) {
+    toast('Menu pengelolaan hanya tersedia untuk owner.', 'err'); return;
+  }
+  if (window.FaceUnlock) FaceUnlock.close();
+  setMobileDrawer(false);
+  state.currentPage = page;
+  document.getElementById('mobile-home-back').hidden = page === 'overview';
+  document.getElementById('mobile-home-row').hidden = page === 'overview';
+  document.querySelectorAll(".nav-item[data-page]").forEach(b => {
+    b.classList.toggle("active", b.dataset.page === page);
+    if (b.dataset.page === page) b.setAttribute("aria-current", "page");
+    else b.removeAttribute("aria-current");
+  });
+  const secondary = !["overview", "devices", "logs"].includes(page);
+  document.getElementById("mobile-more").classList.toggle("active", secondary);
+  if (secondary) document.getElementById("mobile-more").setAttribute("aria-current", "true");
+  else document.getElementById("mobile-more").removeAttribute("aria-current");
+  const userTitles = { overview: 'Beranda Saya', devices: 'Perangkat Saya', logs: 'Riwayat Akses Saya', nfc: 'Kartu NFC Saya', settings: 'Profil Saya' };
+  document.getElementById("page-title").textContent = state.user.role === 'owner' ? PAGE_META[page].title : userTitles[page];
+  const subtitle = state.user.role === 'owner' ? PAGE_META[page].sub : 'Hak akses Anda ditentukan oleh owner perangkat';
+  document.getElementById("page-sub").textContent = (state.devices.some(d=>d.simulated) ? 'SIMULASI PERANGKAT · ' : '') + subtitle;
+  render();
+  if (document.documentElement.classList.contains("is-mobile")) window.scrollTo({ top: 0, behavior: "instant" });
+}
+
+function render() {
+  const map = { overview: renderOverview, devices: renderDevices, logs: renderLogs,
+                permissions: renderPermissions, nfc: renderNfc, guest: renderGuest,
+                settings: renderSettings };
+  map[state.currentPage]();
+}
+
+const content = () => document.getElementById("page-content");
+function setContent(html) {
+  content().innerHTML = html;
+  enhanceResponsiveContent();
+}
+function enhanceResponsiveContent() {
+  content().querySelectorAll('table').forEach(table => {
+    if (table.parentElement.classList.contains('mobile-table-scroll')) return;
+    const scroller = document.createElement('div');
+    scroller.className = 'mobile-table-scroll';
+    scroller.tabIndex = 0;
+    scroller.setAttribute('role', 'region');
+    scroller.setAttribute('aria-label', 'Tabel data, geser ke samping untuk melihat kolom lainnya');
+    table.before(scroller);
+    scroller.append(table);
+  });
+  const sliders = ['.overview-device-grid', '.schedule-stat-grid', '.grid', '.device-picker'];
+  content().querySelectorAll(sliders.join(',')).forEach(slider => {
+    slider.tabIndex = 0;
+    slider.setAttribute('role', 'region');
+    slider.setAttribute('aria-label', 'Daftar kartu, geser ke samping untuk melihat lainnya');
+  });
+}
+// Permissions/NFC/guest lists also render asynchronously after setContent().
+new MutationObserver(enhanceResponsiveContent).observe(content(), { childList: true, subtree: true });
+function loadingHtml(msg) { return `<div class="loading-row"><div class="spinner"></div>${msg}</div>`; }
+function emptyState(icon, msg) {
+  return `<div class="empty-state">${icon}<p>${msg}</p></div>`;
+}
+const ICON_EMPTY = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M8 12h8"/></svg>`;
+
+function getLocalDateISO() {
+  const d = new Date();
+  const pad = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+}
+
+function fmtTime(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso.endsWith("Z") ? iso : iso + "Z");
+  return d.toLocaleString("id-ID", { day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" });
+}
+function isOnline(device) {
+  if (!device.last_seen) return false;
+  const d = new Date(device.last_seen.endsWith("Z") ? device.last_seen : device.last_seen + "Z");
+  return (Date.now() - d.getTime()) < 90 * 1000; // dianggap online kalau heartbeat < 90 detik lalu
+}
+
+/* ================= DEVICES (data load) ================= */
+async function loadDevices() {
+  try {
+    state.devices = await api("/devices/");
+    if (!state.selectedDeviceId && state.devices.length) state.selectedDeviceId = state.devices[0].id;
+  } catch (e) {
+    toast(e.message, "err");
+  }
+}
+
+/* ================= OVERVIEW ================= */
+function mySelectedDevice() {
+  const device = state.devices.find(d => d.id === state.selectedDeviceId) || state.devices[0];
+  if (device) state.selectedDeviceId = device.id;
+  return device;
+}
+function myDevicePicker(device) {
+  return `<div class="form-field"><label for="my-device-picker">Perangkat yang disetujui owner</label><select id="my-device-picker" onchange="chooseMyDevice(this.value)">${state.devices.map(d => `<option value="${d.id}" ${d.id === device.id ? 'selected' : ''}>${escapeHtml(d.name)} · ${escapeHtml(d.owner_name || 'Owner perangkat')}</option>`).join('')}</select></div>`;
+}
+function chooseMyDevice(id) {
+  if (!state.devices.some(d => d.id === id)) return;
+  state.selectedDeviceId = id;
+  if (state.currentPage === 'nfc') renderMyNfc(); else if (state.currentPage === 'devices') UserPortal.renderDevices(); else if (state.currentPage === 'logs') UserPortal.renderHistory(); else renderUserHome();
+}
+function renderUserHome() { UserPortal.renderHome(); }
+async function renderMyNfc() { await UserPortal.renderNfc(); }
+async function registerMyNfc() { await UserPortal.registerNfc(); }
+const myUnlockPending = new Map();
+async function unlockMyDevice(method, uid, button) {
+  const d = mySelectedDevice();
+  if (!d || !['nfc','quick'].includes(method) || myUnlockPending.has(d.id)) return;
+  if ((method === 'quick' && d.can_use_quick !== true) || (method === 'nfc' && d.can_use_nfc !== true)) { toast('Metode ini tidak diizinkan owner.', 'err'); return; }
+  const operation = { token: state.token, userId: state.user.id, controller: new AbortController() };
+  myUnlockPending.set(d.id, operation);
+  if (button) { button.disabled = true; button.setAttribute('aria-busy','true'); }
+  let deadline;
+  try {
+    deadline = setTimeout(() => operation.controller.abort(), 20000);
+    toast('Mengirim perintah dan menunggu konfirmasi smartlock…', '');
+    const base = '/devices/' + encodeURIComponent(d.id);
+    const result = await api(base + (method === 'quick' ? '/quick-unlock' : '/unlock'), { method: 'POST', ...(method === 'nfc' ? { body: { nfc_card_uid: uid } } : {}), signal: operation.controller.signal });
+    if (result.status !== 'command_sent' || !result.transaction_id) throw new Error('Pengiriman belum terkonfirmasi. Periksa riwayat akses.');
+    for (let i = 0; i < 18; i++) {
+      if (state.token !== operation.token || state.user?.id !== operation.userId || operation.controller.signal.aborted) return;
+      const ack = await api(base + '/commands/' + encodeURIComponent(result.transaction_id), { signal: operation.controller.signal });
+      if (ack.result === 'success') { toast('Smartlock berhasil terbuka.', 'ok'); return; }
+      if (['failed','denied','timeout'].includes(ack.result)) throw new Error('Perangkat gagal menjalankan perintah.');
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    toast('Perintah terkirim, tetapi konfirmasi perangkat belum diterima. Periksa riwayat akses.', '');
+  } catch (error) { if (state.user?.id === operation.userId && state.token === operation.token) toast(operation.controller.signal.aborted ? 'Koneksi terlalu lama. Periksa kondisi pintu/riwayat sebelum mencoba lagi.' : error.message, 'err'); }
+  finally { clearTimeout(deadline); if (myUnlockPending.get(d.id) === operation) myUnlockPending.delete(d.id); if (button?.isConnected) { button.disabled=false;button.removeAttribute('aria-busy'); } }
+}
+function renderUserProfile() { UserPortal.renderProfile(); }
+function renderOverview() {
+  if (state.user.role !== 'owner') { renderUserHome(); return; }
+  const isOwner = state.user.role === "owner";
+  const addBtn = isOwner ? `<button class="btn btn-primary" style="width:auto" onclick="addDeviceDialog()">＋ Tambah Perangkat</button>` : "";
+  const devices = state.devices || [];
+  const onlineCount = devices.filter(isOnline).length;
+  const unlockedCount = devices.filter(d => d.lock_status === "unlocked").length;
+  const secureCount = devices.filter(d => d.face_verification_enabled || d.nfc_verification_enabled).length;
+
+  if (!devices.length) {
+    setContent(`
+      <div class="overview-header"><div><div class="eyebrow">SMART ACCESS CONTROL</div><h2>Dashboard Smart Lock</h2><p>Kelola perangkat, jam akses, autentikasi, dan riwayat keamanan.</p></div>${addBtn}</div>
+      <div class="overview-empty">${ICON_EMPTY}<h3>Belum ada perangkat</h3><p>${isOwner ? 'Tambahkan perangkat pertama untuk mulai mengatur pintu.' : 'Minta admin memberikan akses ke perangkat yang tersedia.'}</p></div>
+    `);
+    return;
+  }
+
+  const selected = devices.find(d => d.id === state.selectedDeviceId) || devices[0];
+  state.selectedDeviceId = selected.id;
+  const start = String(selected.access_start_time || '07:00').slice(0,5);
+  const end = String(selected.access_end_time || '17:00').slice(0,5);
+  const scheduleText = selected.access_window_enabled === false ? 'Jadwal dinonaktifkan' : `${start} – ${end} WIB`;
+  const accessPills = d => `
+    <div class="verif-row">
+      <span class="pill ${d.latitude != null ? 'badge-on' : 'badge-off'}">Geofence</span>
+      <span class="pill ${d.face_verification_enabled ? 'badge-on' : 'badge-off'}">Wajah</span>
+      <span class="pill ${d.nfc_verification_enabled ? 'badge-on' : 'badge-off'}">NFC</span>
+    </div>`;
+  const cards = devices.map(d => `
+    <button class="overview-device-card ${d.id === selected.id ? 'selected' : ''}" onclick="openDeviceDetail('${d.id}')">
+      <div class="overview-device-top"><span class="device-glyph">${iconLock()}</span><span class="status-chip"><i class="dot ${isOnline(d) ? 'on' : 'off'}"></i>${isOnline(d) ? 'Online' : 'Offline'}</span></div>
+      <div class="overview-device-name">${escapeHtml(d.name)}</div><div class="overview-device-code">${escapeHtml(d.device_code)}</div>
+      <div class="overview-device-state"><span>${iconLock()} ${escapeHtml(d.lock_status || 'unknown')}</span><span>${iconDoor()} ${escapeHtml(d.door_state || 'unknown')}</span></div>
+      <div class="overview-device-window">${d.access_window_enabled === false ? 'Jadwal akses nonaktif' : `${String(d.access_start_time || '07:00').slice(0,5)}–${String(d.access_end_time || '17:00').slice(0,5)} WIB`}</div>
+      ${accessPills(d)}
+    </button>`).join('');
+
+  setContent(`
+    <div class="overview-header">
+      <div><div class="eyebrow">SMART ACCESS CONTROL · WIB</div><h2>Dashboard Smart Lock</h2><p>Ringkasan keamanan pintu dan status perangkat secara real-time.</p></div>
+      ${addBtn}
+    </div>
+    <div class="overview-metrics">
+      <div class="overview-metric"><div class="metric-symbol mint">${iconDoor()}</div><div><span>Total perangkat</span><strong>${devices.length}</strong><small>Terdaftar di akun ini</small></div></div>
+      <div class="overview-metric"><div class="metric-symbol green"><i class="dot on"></i></div><div><span>Perangkat online</span><strong>${onlineCount}<em> / ${devices.length}</em></strong><small>Status koneksi terakhir</small></div></div>
+      <div class="overview-metric"><div class="metric-symbol amber">${iconLock()}</div><div><span>Kunci terbuka</span><strong>${unlockedCount}</strong><small>Perlu ditutup setelah digunakan</small></div></div>
+      <div class="overview-metric"><div class="metric-symbol violet">⌁</div><div><span>Autentikasi aktif</span><strong>${secureCount}</strong><small>NFC dan/atau verifikasi wajah</small></div></div>
+    </div>
+    <div class="overview-main-grid">
+      <div class="overview-feature">
+        <div class="feature-top"><div><span class="feature-label">PERANGKAT PILIHAN</span><h3>${escapeHtml(selected.name)}</h3><p>${escapeHtml(selected.location || 'Lokasi belum diberi label')} · ${escapeHtml(selected.device_code)}</p></div><span class="status-chip"><i class="dot ${isOnline(selected) ? 'on' : 'off'}"></i>${isOnline(selected) ? 'Terhubung' : 'Offline'}</span></div>
+        <div class="feature-access-row">
+          <div class="lock-visual"><div class="lock-visual-circle">${iconLock()}</div><div><span>Status kunci</span><strong>${escapeHtml(selected.lock_status || 'unknown')}</strong><small>Pintu fisik: ${escapeHtml(selected.door_state || 'unknown')}</small></div></div>
+          <div class="feature-access-actions">
+            <button type="button" class="access-action" onclick="FaceUnlock.open('${selected.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/><path d="M8 9h1m6 0h1m-5 1v4h2m-5 2c2 2 6 2 8 0"/></svg><span><strong>Unlock dengan verifikasi wajah</strong><small>Verifikasi identitas dan lokasi Anda</small></span></button>
+            <button type="button" class="access-action" onclick="FaceUnlock.register()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/><circle cx="12" cy="9" r="3"/><path d="M7 18c0-5 10-5 10 0M18 12v6m-3-3h6"/></svg><span><strong>Daftarkan wajah</strong><small>Simpan referensi wajah untuk Face Unlock</small></span></button>
+          </div>
+        </div>
+        <div class="feature-footer"><div><span>JADWAL AKSES</span><strong>${scheduleText}</strong><small>${selected.access_window_enabled === false ? 'Semua jam mengikuti izin pengguna' : 'Pengguna biasa hanya diizinkan pada jam aktif'}</small></div><button class="btn btn-primary btn-sm" style="width:auto" onclick="openDeviceDetail('${selected.id}')">Atur perangkat <span aria-hidden="true">→</span></button></div>
+      </div>
+      <div class="overview-side">
+        <div class="panel overview-side-panel"><div class="side-title-row"><div><div class="eyebrow">ACCESS POLICY</div><h3>Kebijakan akses</h3></div><span class="policy-mark">✓</span></div>
+          <div class="policy-row"><span class="policy-dot mint-dot"></span><div><strong>Jam operasional</strong><small>${scheduleText}</small></div></div>
+          <div class="policy-row"><span class="policy-dot violet-dot"></span><div><strong>Verifikasi wajah</strong><small>${selected.face_verification_enabled ? 'Aktif' : 'Nonaktif'}</small></div></div>
+          <div class="policy-row"><span class="policy-dot amber-dot"></span><div><strong>Kartu NFC</strong><small>${selected.nfc_verification_enabled ? 'Aktif' : 'Nonaktif'}</small></div></div>
+          <div class="policy-row"><span class="policy-dot green-dot"></span><div><strong>Geofencing</strong><small>${selected.latitude != null ? `Radius ${Math.round(selected.geofence_radius_m || 0)} meter` : 'Belum dikonfigurasi'}</small></div></div>
+          <button class="btn btn-ghost btn-sm policy-button" onclick="goTo('logs')">Lihat access logs →</button>
+        </div>
+        <div class="overview-note"><span class="note-icon">i</span><p><strong>Akses di luar jam</strong><br>Pengguna biasa ditolak di luar jam pintu, kecuali admin memberi izin khusus. Admin tetap dapat membuka melalui Unlock Manual.</p></div>
+      </div>
+    </div>
+    <div class="overview-section-title"><div><h3>Perangkat terdaftar</h3><p>Pilih perangkat untuk mengatur geofence, verifikasi, dan jam akses.</p></div><span>${devices.length} perangkat</span></div>
+    <div class="overview-device-grid">${cards}</div>
+  `);
+}
+
+function openDeviceDetail(id) { state.selectedDeviceId = id; goTo("devices"); }
+
+async function addDeviceDialog() {
+  const { value: formValues } = await Swal.fire({
+    title: "Tambah Device Baru",
+    background: getCssVar("--panel"),
+    color: getCssVar("--text"),
+    customClass: { popup: "swal-dashboard-popup" },
+    html: `
+      <div style="text-align:left">
+        <label style="font-size:12px;color:${getCssVar("--text-dim")};display:block;margin-bottom:4px">Device Code</label>
+        <input id="swal-device-code" class="swal2-input" placeholder="LOCK-LAB-02" style="margin:0 0 4px">
+        <div style="font-size:10.5px;color:${getCssVar("--text-faint")};margin-bottom:12px">Harus PERSIS SAMA (termasuk huruf besar/kecil) dengan DEVICE_UID di firmware ESP32.</div>
+        <label style="font-size:12px;color:${getCssVar("--text-dim")};display:block;margin-bottom:4px">Nama Device</label>
+        <input id="swal-device-name" class="swal2-input" placeholder="Pintu Gudang" style="margin:0 0 12px">
+        <label style="font-size:12px;color:${getCssVar("--text-dim")};display:block;margin-bottom:4px">Lokasi (opsional)</label>
+        <input id="swal-device-location" class="swal2-input" placeholder="Lantai 2" style="margin:0">
+      </div>
+    `,
+    focusConfirm: false,
+    showCancelButton: true,
+    confirmButtonText: "Tambah Device",
+    cancelButtonText: "Batal",
+    confirmButtonColor: "#4fd1c5",
+    cancelButtonColor: getCssVar("--border"),
+    reverseButtons: true,
+    preConfirm: () => {
+      const device_code = document.getElementById("swal-device-code").value.trim();
+      const name = document.getElementById("swal-device-name").value.trim();
+      const location = document.getElementById("swal-device-location").value.trim();
+      if (!device_code || !name) {
+        Swal.showValidationMessage("Device Code dan Nama wajib diisi");
+        return false;
+      }
+      return { device_code, name, location: location || null };
+    },
+  });
+  if (!formValues) return;
+  try {
+    await api("/devices/", { method: "POST", body: formValues });
+    await alertDialog("Device ditambahkan!", `"${formValues.name}" berhasil didaftarkan. Lanjut atur geofence/verifikasi lewat halaman Devices.`);
+    await loadDevices();
+    renderOverview();
+  } catch (e) {
+    toast(e.message, "err");
+  }
+}
+
+function iconLock(){return `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>`;}
+function iconDoor(){return `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="3" width="14" height="18" rx="1"/><circle cx="15" cy="12" r="1"/></svg>`;}
+function iconBattery(){return `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="17" height="10" rx="2"/><path d="M22 10v4"/></svg>`;}
+
+function escapeHtml(str){
+  if (str == null) return "";
+  return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+/* ================= DEVICES (settings) ================= */
+function renderDevices() {
+  if (state.user.role !== 'owner') { UserPortal.renderDevices(); return; }
+  if (!state.devices.length) {
+    setContent(emptyState(ICON_EMPTY, "Belum ada device."));
+    return;
+  }
+  const d = state.devices.find(x => x.id === state.selectedDeviceId) || state.devices[0];
+  state.selectedDeviceId = d.id;
+  const isOwner = state.user.role === "owner";
+
+  const list = state.devices.map(dev => `
+    <button type="button" class="device-list-item ${dev.id === d.id ? 'active' : ''}" aria-pressed="${dev.id === d.id}" onclick="openDeviceDetail('${dev.id}')">
+      <span class="dot ${isOnline(dev) ? 'on' : 'off'}"></span>
+      <div>
+        <div class="name">${escapeHtml(dev.name)}</div>
+        <div class="code">${escapeHtml(dev.device_code)}</div>
+      </div>
+    </button>`).join("");
+
+  const geofenceSectionOwner = `
+    <div class="map-hint">🖱️ Klik di peta atau geser pin buat pilih titik, atau isi angkanya manual di bawah — dua-duanya saling sinkron.</div>
+    <div id="geofence-map"></div>
+    <div class="form-row three">
+      <div class="form-field"><label>Latitude baru</label><input id="geo-lat" type="number" step="any" placeholder="-7.0511"></div>
+      <div class="form-field"><label>Longitude baru</label><input id="geo-lng" type="number" step="any" placeholder="110.3928"></div>
+      <div class="form-field"><label>Radius (m)</label><input id="geo-radius" type="number" value="100"></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-ghost btn-sm" onclick="useBrowserLocationForGeofence()">📍 Lokasi saya</button>
+      <button class="btn btn-primary btn-sm" style="width:auto" onclick="setGeofence('${d.id}')">Simpan Geofence</button>
+      ${d.latitude != null ? `<button class="btn btn-danger-ghost btn-sm" onclick="clearGeofence('${d.id}')">Hapus Geofence</button>` : ""}
+    </div>`;
+  const geofenceSectionReadonly = `<div class="hint">Cuma owner yang bisa mengubah pengaturan geofence.</div>`;
+
+  const toggleSectionOwner = `
+    <div class="toggle-row">
+      <div>
+        <div class="toggle-label" style="color:var(--face)">Verifikasi Wajah</div>
+        <div class="toggle-desc">Kalau aktif, unlock wajib menyertakan hasil face match dari app. Geofence (kalau aktif) tetap wajib dicek bareng ini.</div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" ${d.face_verification_enabled ? "checked" : ""} onchange="toggleVerification('${d.id}','face-verification',this.checked)">
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div class="toggle-row">
+      <div>
+        <div class="toggle-label" style="color:var(--nfc)">Verifikasi NFC</div>
+        <div class="toggle-desc">Kalau aktif, unlock bisa juga lewat tap kartu NFC terdaftar. NFC valid otomatis skip pengecekan geofence.</div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" ${d.nfc_verification_enabled ? "checked" : ""} onchange="toggleVerification('${d.id}','nfc-verification',this.checked)">
+        <span class="slider"></span>
+      </label>
+    </div>`;
+  const toggleSectionReadonly = `
+    <div class="toggle-row">
+      <div class="toggle-label" style="color:var(--face)">Verifikasi Wajah</div>
+      <span class="pill ${d.face_verification_enabled ? 'badge-on' : 'badge-off'}" style="${d.face_verification_enabled ? 'color:var(--face);border-color:rgba(199,146,234,.35)' : ''}">${d.face_verification_enabled ? "Aktif" : "Nonaktif"}</span>
+    </div>
+    <div class="toggle-row">
+      <div class="toggle-label" style="color:var(--nfc)">Verifikasi NFC</div>
+      <span class="pill ${d.nfc_verification_enabled ? 'badge-on' : 'badge-off'}" style="${d.nfc_verification_enabled ? 'color:var(--nfc);border-color:rgba(245,179,66,.35)' : ''}">${d.nfc_verification_enabled ? "Aktif" : "Nonaktif"}</span>
+    </div>
+    <div class="hint" style="margin-top:8px">Cuma owner yang bisa mengubah pengaturan verifikasi.</div>`;
+
+  setContent(`
+    <div class="two-col">
+      <div class="panel device-picker" style="padding:12px">${list}</div>
+      <div>
+        <div class="panel">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+            <div>
+              <div class="panel-title">${escapeHtml(d.name)} <span class="mono" style="color:var(--text-faint);font-weight:400;font-size:11px">${escapeHtml(d.device_code)}</span></div>
+              <div class="panel-desc">${escapeHtml(d.location || "Lokasi belum diberi label")} · Terakhir online ${fmtTime(d.last_seen)}</div>
+            </div>
+            ${isOwner ? `<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end"><button class="btn btn-ghost btn-sm" style="flex-shrink:0" onclick="editDeviceCode('${d.id}')">Ubah Device Code</button><button class="btn btn-danger-ghost btn-sm" style="flex-shrink:0" onclick="deleteDeviceDialog('${d.id}')">Hapus Device</button></div>` : ""}
+          </div>
+          <div class="card-mid" style="margin:0">
+            <div>${iconLock()} ${d.lock_status}</div>
+            <div>${iconDoor()} ${d.door_state}</div>
+            ${d.battery_level != null ? `<div>${iconBattery()} ${Math.round(d.battery_level)}%</div>` : ""}
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title" style="color:var(--geofence)">Verifikasi Lokasi (Geofence)</div>
+          <div class="panel-desc">Unlock akan dicek jaraknya dari titik ini pakai haversine. Kosongkan / hapus untuk menonaktifkan.</div>
+          ${d.latitude != null ? `
+            <div class="form-row three" style="margin-bottom:14px">
+              <div class="form-field"><label>Latitude</label><input readonly value="${d.latitude}"></div>
+              <div class="form-field"><label>Longitude</label><input readonly value="${d.longitude}"></div>
+              <div class="form-field"><label>Radius (m)</label><input readonly value="${d.geofence_radius_m}"></div>
+            </div>
+          ` : `<div class="hint" style="margin-bottom:14px">Geofence belum diset untuk device ini.</div>`}
+          ${isOwner ? geofenceSectionOwner : geofenceSectionReadonly}
+        </div>
+
+        <div class="panel access-window-panel">
+          <div class="panel-title" style="display:flex;align-items:center;gap:9px"><span class="window-icon">◷</span> Jadwal Akses Pintu</div>
+          <div class="panel-desc">Atur jam pengguna biasa boleh membuka pintu. Di luar jadwal, NFC/wajah tetap ditolak kecuali admin memberikan izin akses di luar jam.</div>
+          ${isOwner ? `
+            <div class="access-window-toggle">
+              <div><strong>Terapkan jadwal akses</strong><div class="hint">Admin tetap bisa membuka pintu kapan saja lewat Unlock Manual.</div></div>
+              <label class="switch"><input id="access-window-enabled" type="checkbox" ${d.access_window_enabled !== false ? "checked" : ""}><span class="slider"></span></label>
+            </div>
+            <div class="form-row two access-window-times">
+              <div class="form-field"><label>Waktu mulai (WIB)</label><input id="access-window-start" type="time" value="${String(d.access_start_time || '07:00').slice(0,5)}"></div>
+              <div class="form-field"><label>Waktu tutup (WIB)</label><input id="access-window-end" type="time" value="${String(d.access_end_time || '17:00').slice(0,5)}"></div>
+            </div>
+            <div class="form-actions"><button class="btn btn-primary btn-sm" style="width:auto" onclick="saveAccessSchedule('${d.id}')">Simpan Jadwal Akses</button></div>
+          ` : `
+            <div class="access-window-summary"><span class="dot ${d.access_window_enabled !== false ? 'on' : 'off'}"></span><div><strong>${d.access_window_enabled !== false ? `${String(d.access_start_time || '07:00').slice(0,5)} – ${String(d.access_end_time || '17:00').slice(0,5)} WIB` : 'Jadwal akses dinonaktifkan'}</strong><div class="hint">${d.access_window_enabled !== false ? 'Akses pengguna diizinkan pada rentang waktu tersebut.' : 'Waktu akses tidak dibatasi oleh jadwal global.'}</div></div></div>
+          `}
+        </div>
+
+        <div class="panel">
+          ${isOwner ? toggleSectionOwner : toggleSectionReadonly}
+        </div>
+
+        <div class="panel">
+          <div class="panel-title">Unlock Manual (Admin)</div>
+          <div class="panel-desc">
+            Buka paksa dari console ini. Isi sesuai verifikasi yang aktif di device ini:
+            ${d.latitude != null ? '<strong style="color:var(--geofence)">Geofence aktif</strong> — wajib isi lat/long yang dalam radius, kecuali pakai NFC. ' : ''}
+            ${d.nfc_verification_enabled ? '<strong style="color:var(--nfc)">NFC valid otomatis skip geofence.</strong> ' : ''}
+            ${d.face_verification_enabled ? '<strong style="color:var(--face)">Wajah tetap butuh geofence kalau aktif.</strong>' : ''}
+          </div>
+          <div class="form-row three">
+            <div class="form-field"><label>Latitude</label><input id="unlock-lat" type="number" step="any" value="${d.latitude ?? ''}" placeholder="-7.0511"></div>
+            <div class="form-field"><label>Longitude</label><input id="unlock-lng" type="number" step="any" value="${d.longitude ?? ''}" placeholder="110.3928"></div>
+            <div class="form-field"><label>Akurasi GPS (m)</label><input id="unlock-accuracy" type="number" placeholder="10"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-field"><label>NFC Card UID (opsional, skip geofence)</label><input id="unlock-nfc" placeholder="TAG-001"></div>
+            <div class="form-field" style="display:flex;align-items:flex-end;gap:8px;padding-bottom:2px">
+              <button type="button" class="btn btn-ghost btn-sm" onclick="FaceUnlock.open('${d.id}')">Verifikasi wajah lewat kamera</button>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button class="btn btn-ghost btn-sm" onclick="useBrowserLocation()">📍 Pakai lokasi browser saya</button>
+            <button class="btn btn-primary btn-sm" style="width:auto;background:var(--warning);color:#1a1200" onclick="manualUnlock('${d.id}')">Unlock Sekarang</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `);
+  if (isOwner) initGeofenceMap(d);
+}
+
+async function deleteDeviceDialog(deviceId) {
+  const device = state.devices.find(d => d.id === deviceId);
+  const ok = await confirmDialog(
+    `Hapus "${device ? device.name : 'device ini'}"?`,
+    "SEMUA data yang nempel ke device ini (riwayat akses, izin user, kartu NFC, akses tamu) ikut terhapus permanen. Tidak bisa dibatalkan.",
+    "Ya, hapus permanen"
+  );
+  if (!ok) return;
+  try {
+    await api(`/devices/${deviceId}`, { method: "DELETE" });
+    toast("Device dihapus.", "ok");
+    state.selectedDeviceId = null;
+    await loadDevices();
+    goTo("overview");
+  } catch (e) { toast(e.message, "err"); }
+}
+
+/* ================= LEAFLET: peta pemilih geofence ================= */
+let _geoMap = null, _geoMarker = null, _geoCircle = null;
+function createGeoIcon() { return L.divIcon({
+  className: "",
+  html: '<div style="width:16px;height:16px;border-radius:50%;background:#4fd1c5;border:3px solid #04211e;box-shadow:0 0 0 4px rgba(79,209,197,.3)"></div>',
+  iconSize: [16, 16], iconAnchor: [8, 8],
+}); }
+
+function initGeofenceMap(device) {
+  if (!window.L) {
+    document.getElementById('geofence-map').textContent = 'Peta belum dapat dimuat. Periksa koneksi internet.';
+    return;
+  }
+  // Bersihin instance map lama dulu (renderDevices bisa dipanggil berkali-kali
+  // tiap ganti device / abis save), biar gak numpuk & error "already initialized".
+  if (_geoMap) { _geoMap.remove(); _geoMap = null; }
+
+  const startLat = device.latitude != null ? device.latitude : -7.0511;
+  const startLng = device.longitude != null ? device.longitude : 110.3928;
+  const startRadius = device.geofence_radius_m != null ? device.geofence_radius_m : 100;
+
+  document.getElementById("geo-lat").value = startLat;
+  document.getElementById("geo-lng").value = startLng;
+  document.getElementById("geo-radius").value = startRadius;
+
+  _geoMap = L.map("geofence-map", { attributionControl: true }).setView([startLat, startLng], 16);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap contributors',
+  }).addTo(_geoMap);
+
+  _geoMarker = L.marker([startLat, startLng], { icon: createGeoIcon(), draggable: true }).addTo(_geoMap);
+  _geoCircle = L.circle([startLat, startLng], {
+    radius: startRadius, color: "#4fd1c5", weight: 1.5, fillColor: "#4fd1c5", fillOpacity: 0.12,
+  }).addTo(_geoMap);
+
+  _geoMarker.on("drag", (e) => {
+    const ll = e.target.getLatLng();
+    _geoCircle.setLatLng(ll);
+    updateGeoInputsFromLatLng(ll);
+  });
+  _geoMap.on("click", (e) => {
+    _geoMarker.setLatLng(e.latlng);
+    _geoCircle.setLatLng(e.latlng);
+    updateGeoInputsFromLatLng(e.latlng);
+  });
+
+  // sinkron balik: kalau angka diketik manual, pin & lingkaran ikut pindah
+  document.getElementById("geo-lat").oninput = syncGeoMarkerFromInputs;
+  document.getElementById("geo-lng").oninput = syncGeoMarkerFromInputs;
+  document.getElementById("geo-radius").oninput = syncGeoRadiusFromInput;
+}
+
+function updateGeoInputsFromLatLng(ll) {
+  document.getElementById("geo-lat").value = ll.lat.toFixed(6);
+  document.getElementById("geo-lng").value = ll.lng.toFixed(6);
+}
+function syncGeoMarkerFromInputs() {
+  const lat = parseFloat(document.getElementById("geo-lat").value);
+  const lng = parseFloat(document.getElementById("geo-lng").value);
+  if (isNaN(lat) || isNaN(lng) || !_geoMarker) return;
+  const ll = L.latLng(lat, lng);
+  _geoMarker.setLatLng(ll);
+  _geoCircle.setLatLng(ll);
+}
+function syncGeoRadiusFromInput() {
+  const r = parseFloat(document.getElementById("geo-radius").value);
+  if (!isNaN(r) && _geoCircle) _geoCircle.setRadius(r);
+}
+function useBrowserLocationForGeofence() {
+  if (!navigator.geolocation) { toast("Browser ini tidak mendukung geolocation.", "err"); return; }
+  toast("Meminta izin lokasi browser...", "");
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const ll = L.latLng(pos.coords.latitude, pos.coords.longitude);
+      updateGeoInputsFromLatLng(ll);
+      _geoMarker.setLatLng(ll);
+      _geoCircle.setLatLng(ll);
+      _geoMap.setView(ll, 16);
+      toast("Lokasi browser terisi otomatis.", "ok");
+    },
+    (err) => { toast("Gagal ambil lokasi: " + err.message, "err"); }
+  );
+}
+
+async function editDeviceCode(deviceId) {
+  const device = state.devices.find(d => d.id === deviceId);
+  if (!device) { toast("Device tidak ditemukan di halaman.", "err"); return; }
+
+  const result = await Swal.fire({
+    title: "Ubah Device Code",
+    text: "Harus sama persis dengan DEVICE_UID pada firmware ESP32. Topic MQTT ikut menggunakan kode ini.",
+    input: "text",
+    inputValue: device.device_code,
+    background: getCssVar("--panel"),
+    color: getCssVar("--text"),
+    customClass: { popup: "swal-dashboard-popup" },
+    showCancelButton: true,
+    confirmButtonText: "Simpan",
+    cancelButtonText: "Batal",
+    confirmButtonColor: "#4fd1c5",
+    reverseButtons: true,
+    preConfirm: (value) => {
+      const code = (value || "").trim();
+      if (!/^[A-Za-z0-9_-]{1,50}$/.test(code)) {
+        Swal.showValidationMessage("Gunakan 1–50 karakter: huruf, angka, tanda hubung (-), atau garis bawah (_).");
+        return false;
+      }
+      return code;
+    }
+  });
+  if (!result.isConfirmed || !result.value) return;
+
+  try {
+    await api(`/devices/${deviceId}/code`, { method: "PATCH", body: { device_code: result.value } });
+    toast("Device Code berhasil diperbarui. Pastikan firmware menggunakan kode yang sama.", "ok");
+    await loadDevices();
+    renderDevices();
+  } catch (e) {
+    toast(e.message, "err");
+  }
+}
+
+async function setGeofence(deviceId) {
+  const lat = parseFloat(document.getElementById("geo-lat").value);
+  const lng = parseFloat(document.getElementById("geo-lng").value);
+  const radius = parseFloat(document.getElementById("geo-radius").value) || 100;
+  if (isNaN(lat) || isNaN(lng)) { toast("Isi latitude & longitude dulu.", "err"); return; }
+  try {
+    await api(`/devices/${deviceId}/location`, { method: "PATCH", body: { latitude: lat, longitude: lng, geofence_radius_m: radius } });
+    toast("Geofence tersimpan.", "ok");
+    await loadDevices(); renderDevices();
+  } catch (e) { toast(e.message, "err"); }
+}
+async function clearGeofence(deviceId) {
+  if (!(await confirmDialog("Hapus geofence?", "Unlock jadi tidak perlu kirim lokasi lagi setelah ini."))) return;
+  try {
+    await api(`/devices/${deviceId}/location`, { method: "DELETE" });
+    toast("Geofence dihapus.", "ok");
+    await loadDevices(); renderDevices();
+  } catch (e) { toast(e.message, "err"); }
+}
+async function saveAccessSchedule(deviceId) {
+  const enabled = document.getElementById("access-window-enabled").checked;
+  const start_time = document.getElementById("access-window-start").value;
+  const end_time = document.getElementById("access-window-end").value;
+  if (!start_time || !end_time) { toast("Isi waktu mulai dan tutup terlebih dahulu.", "err"); return; }
+  if (start_time === end_time) { toast("Waktu mulai dan tutup tidak boleh sama.", "err"); return; }
+  try {
+    await api(`/devices/${deviceId}/access-schedule`, { method: "PATCH", body: { enabled, start_time, end_time } });
+    await loadDevices();
+    renderDevices();
+    toast("Jadwal akses pintu berhasil disimpan.", "ok");
+  } catch (e) { toast(e.message, "err"); }
+}
+
+async function toggleVerification(deviceId, kind, enable) {
+  try {
+    await api(`/devices/${deviceId}/${kind}`, { method: enable ? "PATCH" : "DELETE" });
+    toast(`${kind === "face-verification" ? "Verifikasi wajah" : "Verifikasi NFC"} ${enable ? "diaktifkan" : "dimatikan"}.`, "ok");
+    await loadDevices();
+  } catch (e) { toast(e.message, "err"); renderDevices(); }
+}
+async function manualUnlock(deviceId) {
+  const lat = document.getElementById("unlock-lat").value;
+  const lng = document.getElementById("unlock-lng").value;
+  const accuracy = document.getElementById("unlock-accuracy").value;
+  const nfc = document.getElementById("unlock-nfc").value.trim();
+
+  const body = {};
+  if (lat !== "") body.latitude = parseFloat(lat);
+  if (lng !== "") body.longitude = parseFloat(lng);
+  if (accuracy !== "") body.accuracy_m = parseFloat(accuracy);
+  if (nfc) body.nfc_card_uid = nfc;
+
+  try {
+    const res = await api(`/devices/${deviceId}/unlock`, { method: "POST", body });
+    toast(res.message || "Unlock berhasil dikirim.", "ok");
+  } catch (e) { toast(e.message, "err"); }
+}
+
+function useBrowserLocation() {
+  if (!navigator.geolocation) { toast("Browser ini tidak mendukung geolocation.", "err"); return; }
+  toast("Meminta izin lokasi browser...", "");
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      document.getElementById("unlock-lat").value = pos.coords.latitude;
+      document.getElementById("unlock-lng").value = pos.coords.longitude;
+      document.getElementById("unlock-accuracy").value = Math.round(pos.coords.accuracy);
+      toast("Lokasi browser terisi otomatis.", "ok");
+    },
+    (err) => { toast("Gagal ambil lokasi: " + err.message, "err"); }
+  );
+}
+
+/* ================= DEVICE PICKER (shared: logs/permissions/nfc/guest) ================= */
+function devicePickerHtml(selectedId, onchangeFn) {
+  const opts = state.devices.map(d => `<option value="${d.id}" ${d.id === selectedId ? "selected" : ""}>${escapeHtml(d.name)} — ${escapeHtml(d.device_code)}</option>`).join("");
+  return `<select class="device-picker" onchange="${onchangeFn}(this.value)">${opts}</select>`;
+}
+
+/* ================= ACCESS LOGS ================= */
+async function renderLogs() {
+  if (state.user.role !== 'owner') { await UserPortal.renderHistory(); return; }
+  if (!state.devices.length) { setContent(emptyState(ICON_EMPTY, "Belum ada device.")); return; }
+  const deviceId = state.selectedDeviceId || state.devices[0].id;
+  setContent(`
+    <div class="section-head">
+      ${devicePickerHtml(deviceId, "onLogsDeviceChange")}
+      <button class="btn btn-ghost btn-sm" id="export-logs-btn" style="display:none" onclick="exportLogsCsv()">⬇ Export CSV</button>
+    </div>
+    <div id="logs-body">${loadingHtml("Memuat riwayat akses...")}</div>
+  `);
+  try {
+    const logs = await api(`/devices/${deviceId}/logs`);
+    state._lastLogs = logs; // simpan buat dipakai exportLogsCsv()
+    const body = document.getElementById("logs-body");
+    if (!body) return;
+    if (!logs.length) { body.innerHTML = emptyState(ICON_EMPTY, "Belum ada riwayat akses untuk device ini."); return; }
+    document.getElementById("export-logs-btn").style.display = state.user.role === 'owner' ? "inline-block" : "none";
+    const sorted = logs.slice().sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+    // ---- Data buat chart: tren 7 hari terakhir + breakdown hasil ----
+    const dayBuckets = {}; // "26 Agu" -> count
+    const resultCounts = {};
+    const now = new Date();
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now); d.setDate(d.getDate() - i);
+      const key = d.toLocaleDateString("id-ID", { day: "2-digit", month: "short" });
+      dayBuckets[key] = 0;
+    }
+    logs.forEach(l => {
+      const d = new Date(l.timestamp.endsWith("Z") ? l.timestamp : l.timestamp + "Z");
+      const key = d.toLocaleDateString("id-ID", { day: "2-digit", month: "short" });
+      if (key in dayBuckets) dayBuckets[key]++;
+      resultCounts[l.result] = (resultCounts[l.result] || 0) + 1;
+    });
+
+    const lines = sorted.map(l => `
+      <div class="log-line">
+        <span class="log-time mono">${fmtTime(l.timestamp)}</span>
+        <span class="log-method mono">${l.method}</span>
+        <span class="log-result mono res-${l.result}">${l.result}</span>
+        <span class="log-note">${escapeHtml(l.note || (l.result === "success" ? "Unlock berhasil." : "—"))}</span>
+      </div>`).join("");
+    body.innerHTML = `
+      <div class="chart-grid">
+        <div class="chart-panel">
+          <div class="chart-panel-title">Percobaan Unlock — 7 Hari Terakhir</div>
+          <div class="chart-canvas-wrap"><canvas id="logs-trend-chart"></canvas></div>
+        </div>
+        <div class="chart-panel">
+          <div class="chart-panel-title">Breakdown Hasil</div>
+          <div class="chart-canvas-wrap"><canvas id="logs-result-chart"></canvas></div>
+        </div>
+      </div>
+      <div class="terminal">
+        <div class="terminal-head"><span class="tdot" style="background:var(--danger)"></span><span class="tdot" style="background:var(--warning)"></span><span class="tdot" style="background:var(--success)"></span>&nbsp; access_log.stream</div>
+        <div class="terminal-body">${lines}</div>
+      </div>`;
+    renderLogsCharts(dayBuckets, resultCounts);
+  } catch (e) {
+    toast(e.message, "err");
+    const body = document.getElementById("logs-body");
+    if (body) body.innerHTML = emptyState(ICON_EMPTY, "Gagal memuat log.");
+  }
+}
+function onLogsDeviceChange(id) { state.selectedDeviceId = id; renderLogs(); }
+
+function downloadCsv(rows, filename) {
+  const csv = Papa.unparse(rows);
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast("CSV terdownload: " + filename, "ok");
+}
+function exportLogsCsv() {
+  const logs = state._lastLogs || [];
+  if (!logs.length) { toast("Tidak ada data buat diexport.", "err"); return; }
+  const device = state.devices.find(d => d.id === state.selectedDeviceId);
+  const rows = logs.slice().sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp)).map(l => ({
+    waktu: l.timestamp,
+    metode: l.method,
+    hasil: l.result,
+    latitude: l.latitude ?? "",
+    longitude: l.longitude ?? "",
+    akurasi_gps_m: l.accuracy_m ?? "",
+    catatan: l.note || "",
+  }));
+  downloadCsv(rows, `access_logs_${device ? device.device_code : "device"}_${new Date().toISOString().slice(0,10)}.csv`);
+}
+
+let _logsTrendChart = null, _logsResultChart = null;
+const RESULT_COLOR = { success: "#4ade80", failed: "#f87171", denied: "#f87171", timeout: "#f87171", pending: "#fbbf24" };
+const RESULT_LABEL = { success: "Berhasil", failed: "Gagal", denied: "Ditolak", timeout: "Timeout", pending: "Pending" };
+
+function renderLogsCharts(dayBuckets, resultCounts) {
+  if (_logsTrendChart) { _logsTrendChart.destroy(); _logsTrendChart = null; }
+  if (_logsResultChart) { _logsResultChart.destroy(); _logsResultChart = null; }
+
+  const trendCtx = document.getElementById("logs-trend-chart");
+  const resultCtx = document.getElementById("logs-result-chart");
+  if (!trendCtx || !resultCtx) return;
+
+  Chart.defaults.color = getCssVar("--text-dim");
+  Chart.defaults.font.family = "'Inter', sans-serif";
+  Chart.defaults.font.size = 11;
+  const gridColor = getCssVar("--border-soft");
+
+  _logsTrendChart = new Chart(trendCtx, {
+    type: "line",
+    data: {
+      labels: Object.keys(dayBuckets),
+      datasets: [{
+        data: Object.values(dayBuckets),
+        borderColor: "#4fd1c5",
+        backgroundColor: "rgba(79,209,197,.12)",
+        fill: true,
+        tension: 0.35,
+        pointRadius: 3,
+        pointBackgroundColor: "#4fd1c5",
+      }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: gridColor } },
+        y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: gridColor } },
+      },
+    },
+  });
+
+  const resultKeys = Object.keys(resultCounts);
+  _logsResultChart = new Chart(resultCtx, {
+    type: "doughnut",
+    data: {
+      labels: resultKeys.map(k => RESULT_LABEL[k] || k),
+      datasets: [{
+        data: resultKeys.map(k => resultCounts[k]),
+        backgroundColor: resultKeys.map(k => RESULT_COLOR[k] || "#8891a3"),
+        borderColor: getCssVar("--panel"),
+        borderWidth: 2,
+      }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: "bottom", labels: { boxWidth: 10, padding: 12 } } },
+    },
+  });
+}
+
+/* ================= PERMISSIONS ================= */
+async function renderPermissions() {
+  if (!state.devices.length) { setContent(emptyState(ICON_EMPTY, "Belum ada device.")); return; }
+  const deviceId = state.selectedDeviceId || state.devices[0].id;
+  setContent(`
+    <div class="section-head">
+      ${devicePickerHtml(deviceId, "onPermDeviceChange")}
+      <button class="btn btn-ghost btn-sm" id="export-perm-btn" style="display:none" onclick="exportPermissionsCsv()">⬇ Export CSV</button>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Tambah Akses</div>
+      <div class="panel-desc">Pilih dari user yang sudah register di sistem — tidak perlu mengetik/mengingat email secara manual.</div>
+      <div class="form-row">
+        <div class="form-field">
+          <label>User</label>
+          <select id="perm-user-select"><option value="">Memuat daftar user...</option></select>
+        </div>
+        <div class="form-field"><label>Jadwal (opsional)</label>
+          <div style="display:flex;gap:6px">
+            <input id="perm-start" type="time" style="flex:1">
+            <input id="perm-end" type="time" style="flex:1">
+          </div>
+        </div>
+      </div>
+      <div class="access-window-toggle permission-override-toggle">
+        <div><strong>Izinkan akses di luar jam pintu</strong><div class="hint">Gunakan hanya untuk pengguna yang diberi izin khusus oleh admin.</div></div>
+        <label class="switch"><input id="perm-override-hours" type="checkbox"><span class="slider"></span></label>
+      </div>
+      <div class="permission-method-choices" aria-label="Metode akses yang diizinkan"><label><input id="perm-allow-face" type="checkbox" checked> Wajah</label><label><input id="perm-allow-nfc" type="checkbox" checked> NFC</label><label><input id="perm-allow-quick" type="checkbox"> Quick access</label></div>
+      <div class="form-actions">
+        <button class="btn btn-primary btn-sm" style="width:auto" onclick="grantPermission('${deviceId}')">Beri Akses</button>
+      </div>
+    </div>
+    <div id="perm-list">${loadingHtml("Memuat daftar izin...")}</div>
+  `);
+  loadUserPicker(deviceId);
+  await loadPermissionList(deviceId);
+}
+function onPermDeviceChange(id) { state.selectedDeviceId = id; renderPermissions(); }
+
+async function loadUserPicker(deviceId) {
+  const select = document.getElementById("perm-user-select");
+  try {
+    const users = await api("/auth/users");
+    // Sembunyiin diri sendiri (owner) dari daftar -- gak masuk akal grant akses ke diri sendiri
+    const options = users.filter(u => u.id !== state.user.id);
+    if (!options.length) {
+      select.innerHTML = `<option value="">Belum ada user lain yang register</option>`;
+      return;
+    }
+    select.innerHTML = options.map(u =>
+      `<option value="${escapeHtml(u.email)}">${escapeHtml(u.name)} — ${escapeHtml(u.email)} (${u.role})</option>`
+    ).join("");
+  } catch (e) {
+    select.innerHTML = `<option value="">Gagal memuat daftar user</option>`;
+    toast(e.message, "err");
+  }
+}
+
+function exportPermissionsCsv() {
+  const perms = state._lastPerms || [];
+  if (!perms.length) { toast("Tidak ada data buat diexport.", "err"); return; }
+  const device = state.devices.find(d => d.id === state.selectedDeviceId);
+  const rows = perms.map(p => ({
+    nama: p.user_name,
+    email: p.user_email,
+    boleh_unlock: p.can_unlock ? "Ya" : "Tidak",
+    jadwal_mulai: p.schedule_start || "",
+    jadwal_selesai: p.schedule_end || "",
+  }));
+  downloadCsv(rows, `permissions_${device ? device.device_code : "device"}_${new Date().toISOString().slice(0,10)}.csv`);
+}
+
+async function loadPermissionList(deviceId) {
+  try {
+    const perms = await api(`/permissions/?device_id=${deviceId}`);
+    state._lastPerms = perms; // simpan buat dipakai exportPermissionsCsv()
+    const el = document.getElementById("perm-list");
+    if (!el) return;
+    if (!perms.length) { el.innerHTML = emptyState(ICON_EMPTY, "Belum ada user yang diberi izin untuk device ini."); return; }
+    const exportBtn = document.getElementById("export-perm-btn");
+    if (exportBtn) exportBtn.style.display = "inline-block";
+    const rows = perms.map(p => `
+      <tr>
+        <td><strong>${escapeHtml(p.user_name)}</strong><br><span style="color:var(--text-faint);font-size:11px">${escapeHtml(p.user_email)}</span></td>
+        <td>${p.can_unlock ? '<span style="color:var(--success)">Boleh unlock</span>' : '<span style="color:var(--danger)">Ditolak</span>'}</td>
+        <td class="mono">${p.schedule_start && p.schedule_end ? `${p.schedule_start}–${p.schedule_end}` : "Mengikuti jadwal pintu"}</td>
+        <td><button class="btn ${p.allow_outside_schedule ? 'btn-primary' : 'btn-ghost'} btn-sm" onclick="togglePermissionOverride('${p.id}','${deviceId}',${p.allow_outside_schedule ? 'false' : 'true'})">${p.allow_outside_schedule ? 'Diizinkan' : 'Tidak'}</button></td>
+        <td><div class="permission-method-choices">${[['allow_face','Wajah'],['allow_nfc','NFC'],['allow_quick','Quick']].map(([field,label]) => `<label><input type="checkbox" ${p[field] ? 'checked' : ''} onchange="setPermissionMethod('${p.id}','${deviceId}','${field}',this.checked)"> ${label}</label>`).join('')}</div></td>
+        <td><button class="btn btn-danger-ghost btn-sm" onclick="revokePermission('${p.id}','${deviceId}')">Cabut</button></td>
+      </tr>`).join("");
+    el.innerHTML = `<div class="panel" style="padding:8px 4px"><table>
+      <thead><tr><th>User</th><th>Status</th><th>Jam personal</th><th>Akses di luar jam</th><th>Metode akses</th><th></th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`;
+  } catch (e) { toast(e.message, "err"); }
+}
+async function grantPermission(deviceId) {
+  const email = document.getElementById("perm-user-select").value;
+  const start = document.getElementById("perm-start").value || null;
+  const end = document.getElementById("perm-end").value || null;
+  const allowOutside = document.getElementById("perm-override-hours")?.checked || false;
+  if (!email) { toast("Pilih user dulu dari daftar.", "err"); return; }
+  try {
+    await api("/permissions/", { method: "POST", body: { device_id: deviceId, user_email: email, can_unlock: true, schedule_start: start, schedule_end: end, allow_outside_schedule: allowOutside,
+      allow_face: document.getElementById('perm-allow-face').checked, allow_nfc: document.getElementById('perm-allow-nfc').checked, allow_quick: document.getElementById('perm-allow-quick').checked } });
+    toast("Akses diberikan.", "ok");
+    await loadPermissionList(deviceId);
+    await loadUserPicker(deviceId);
+  } catch (e) { toast(e.message, "err"); }
+}
+async function togglePermissionOverride(id, deviceId, allow) {
+  try {
+    await api(`/permissions/${id}`, { method: "PATCH", body: { allow_outside_schedule: allow } });
+    toast(allow ? "Izin akses di luar jam diberikan." : "Izin akses di luar jam dicabut.", "ok");
+    await loadPermissionList(deviceId);
+  } catch (e) { toast(e.message, "err"); }
+}
+async function setPermissionMethod(id, deviceId, field, checked) {
+  if (!['allow_face','allow_nfc','allow_quick'].includes(field)) return;
+  try { await api('/permissions/' + id, { method: 'PATCH', body: { [field]: checked } }); toast('Metode akses diperbarui.', 'ok'); await loadPermissionList(deviceId); }
+  catch (error) { toast(error.message, 'err'); await loadPermissionList(deviceId); }
+}
+
+async function revokePermission(id, deviceId) {
+  if (!(await confirmDialog("Cabut akses user ini?", "User ini tidak akan bisa unlock device lagi."))) return;
+  try {
+    await api(`/permissions/${id}`, { method: "DELETE" });
+    toast("Akses dicabut.", "ok");
+    await loadPermissionList(deviceId);
+  } catch (e) { toast(e.message, "err"); }
+}
+
+/* ================= NFC CARDS ================= */
+async function loadRegisteredUsers(force = false) {
+  if (!force && Array.isArray(state._allUsers)) return state._allUsers;
+  const users = await api("/auth/users");
+  state._allUsers = Array.isArray(users) ? users : [];
+  return state._allUsers;
+}
+
+function nfcUserOptions(users, selectedEmail = "", includeUnassigned = true) {
+  const activeUsers = (users || []).filter(u => u.is_active !== false);
+  const first = includeUnassigned ? '<option value="">— Belum dikaitkan (opsional) —</option>' : '<option value="">Pilih pemilik kartu...</option>';
+  return first + activeUsers.map(u => {
+    const role = u.academic_role || (u.role === "owner" ? "owner/admin" : "user belum diatur");
+    const selected = u.email === selectedEmail ? " selected" : "";
+    return `<option value="${escapeHtml(u.email)}"${selected}>${escapeHtml(u.name)} — ${escapeHtml(u.email)} · ${escapeHtml(role)}</option>`;
+  }).join("");
+}
+
+async function renderNfc() {
+  if (state.user.role !== 'owner') { await renderMyNfc(); return; }
+  if (!state.devices.length) { setContent(emptyState(ICON_EMPTY, "Belum ada device.")); return; }
+  const deviceId = state.selectedDeviceId || state.devices[0].id;
+  let users = [];
+  try {
+    users = await loadRegisteredUsers();
+  } catch (e) {
+    toast("Daftar user gagal dimuat: " + e.message, "err");
+  }
+  setContent(`
+    <div class="section-head">
+      ${devicePickerHtml(deviceId, "onNfcDeviceChange")}
+      <button class="btn btn-ghost btn-sm" id="export-nfc-btn" style="display:none" onclick="exportNfcCsv()">⬇ Export CSV</button>
+    </div>
+    <div class="panel">
+      <div class="panel-title" style="color:var(--nfc)">Daftarkan Kartu NFC</div>
+      <div class="panel-desc">Scan tag/kartu fisik menggunakan NFC HP, kemudian masukkan UID hasil scan di sini. Untuk autentikasi pengguna, kaitkan kartu ke akun yang benar. Pendaftaran dan pengaitan kartu hanya tersedia untuk owner.</div>
+      <div class="form-row three">
+        <div class="form-field"><label>UID kartu/tag</label><input id="nfc-uid" placeholder="Contoh: 04:3E:25:A2:5D:6F:80" autocomplete="off"></div>
+        <div class="form-field"><label>Nama/label kartu</label><input id="nfc-label" placeholder="Contoh: Kartu Mahasiswa Ridho" autocomplete="off"></div>
+        <div class="form-field"><label>Pemilik kartu (opsional)</label><select id="nfc-owner" class="nfc-owner-select">${nfcUserOptions(users)}</select></div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-primary btn-sm" style="width:auto;background:var(--nfc);color:#1a1200" onclick="createNfcCard('${deviceId}')">Daftarkan Kartu</button>
+        <button class="btn btn-ghost btn-sm" onclick="refreshNfcUsers()">Muat ulang daftar user</button>
+      </div>
+    </div>
+    <div class="panel" style="padding:14px 16px">
+      <div class="panel-title">Cara kerja pengaitan</div>
+      <div class="panel-desc" style="margin-bottom:0">Pilih <strong>Kaitkan User</strong> atau <strong>Ganti User</strong> di daftar kartu untuk memilih nama dari dropdown — tidak perlu mengetik email di backend. Kartu tanpa pemilik tetap bisa tersimpan, tetapi hanya dapat digunakan pada alur autentikasi yang tidak memerlukan identitas akun.</div>
+    </div>
+    <div id="nfc-list">${loadingHtml("Memuat kartu terdaftar...")}</div>
+  `);
+  await loadNfcList(deviceId);
+}
+function onNfcDeviceChange(id) { state.selectedDeviceId = id; renderNfc(); }
+async function refreshNfcUsers() {
+  try {
+    await loadRegisteredUsers(true);
+    toast("Daftar user diperbarui.", "ok");
+    renderNfc();
+  } catch (e) { toast("Gagal memuat user: " + e.message, "err"); }
+}
+
+function exportNfcCsv() {
+  const cards = state._lastNfcCards || [];
+  if (!cards.length) { toast("Tidak ada data buat diexport.", "err"); return; }
+  const device = state.devices.find(d => d.id === state.selectedDeviceId);
+  const rows = cards.map(c => ({
+    card_uid: c.card_uid,
+    label: c.label,
+    user: c.user_email ? `${c.user_name || ""} <${c.user_email}>` : "",
+    status: c.is_active ? "Aktif" : "Nonaktif",
+  }));
+  downloadCsv(rows, `nfc_cards_${device ? device.device_code : "device"}_${new Date().toISOString().slice(0,10)}.csv`);
+}
+
+async function loadNfcList(deviceId) {
+  try {
+    const cards = await api(`/nfc-cards/?device_id=${deviceId}`);
+    state._lastNfcCards = cards; // simpan buat dipakai exportNfcCsv()
+    const el = document.getElementById("nfc-list");
+    if (!el) return;
+    if (!cards.length) { el.innerHTML = emptyState(ICON_EMPTY, "Belum ada kartu NFC terdaftar untuk device ini."); return; }
+    const exportBtn = document.getElementById("export-nfc-btn");
+    if (exportBtn) exportBtn.style.display = "inline-block";
+    const rows = cards.map(c => `
+      <tr>
+        <td class="mono">${escapeHtml(c.card_uid)}</td>
+        <td><strong>${escapeHtml(c.label)}</strong></td>
+        <td class="nfc-user-cell">${c.user_email ? `<div class="nfc-user-status" style="color:var(--success)"><span class="dot on"></span>${escapeHtml(c.user_name || "User terdaftar")}</div><div style="font-size:11px;color:var(--text-dim);margin-top:4px">${escapeHtml(c.user_email)}</div>` : '<span class="nfc-user-status" style="color:var(--danger)"><span class="dot off"></span>Belum dikaitkan</span><div style="font-size:10.5px;color:var(--text-faint);margin-top:4px">Kartu belum dikaitkan ke akun pengguna</div>'}</td>
+        <td>${c.is_active ? '<span style="color:var(--success)">Aktif</span>' : '<span style="color:var(--text-faint)">Nonaktif</span>'}</td>
+        <td><div class="nfc-actions">
+          <button class="btn btn-ghost btn-sm" onclick="assignNfcUser('${c.id}','${deviceId}')">${c.user_email ? "Ganti User" : "Kaitkan User"}</button>
+          ${c.user_email ? `<button class="btn btn-ghost btn-sm" onclick="clearNfcUser('${c.id}','${deviceId}')">Lepas User</button>` : ""}
+          <button class="btn btn-ghost btn-sm" onclick="toggleNfcCard('${c.id}','${deviceId}',${!c.is_active})">${c.is_active ? "Nonaktifkan" : "Aktifkan"}</button>
+          <button class="btn btn-danger-ghost btn-sm" onclick="deleteNfcCard('${c.id}','${deviceId}')">Hapus</button>
+        </div></td>
+      </tr>`).join("");
+    el.innerHTML = `<div class="panel" style="padding:10px 8px;overflow-x:auto"><table>
+      <thead><tr><th>UID kartu/tag</th><th>Label</th><th>Pemilik akun</th><th>Status</th><th>Aksi</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`;
+  } catch (e) { toast(e.message, "err"); }
+}
+async function createNfcCard(deviceId) {
+  const uid = document.getElementById("nfc-uid").value.trim();
+  const label = document.getElementById("nfc-label").value.trim();
+  const email = document.getElementById("nfc-owner").value || null;
+  if (!uid || !label) { toast("Isi UID dan label kartu.", "err"); return; }
+  try {
+    await api("/nfc-cards/", { method: "POST", body: { device_id: deviceId, card_uid: uid, label, user_email: email } });
+    toast(email ? "Kartu terdaftar dan sudah dikaitkan ke user." : "Kartu terdaftar. Kamu bisa mengaitkan user nanti.", "ok");
+    document.getElementById("nfc-uid").value = "";
+    document.getElementById("nfc-label").value = "";
+    document.getElementById("nfc-owner").value = "";
+    await loadNfcList(deviceId);
+  } catch (e) { toast(e.message, "err"); }
+}
+async function assignNfcUser(id, deviceId) {
+  let users;
+  try { users = await loadRegisteredUsers(); }
+  catch (e) { toast("Gagal memuat daftar user: " + e.message, "err"); return; }
+  const activeUsers = users.filter(u => u.is_active !== false);
+  if (!activeUsers.length) { toast("Belum ada user aktif untuk dipilih.", "err"); return; }
+  const currentCard = (state._lastNfcCards || []).find(c => c.id === id);
+  const options = {};
+  activeUsers.forEach(u => {
+    const academic = u.academic_role ? ` · ${u.academic_role}` : "";
+    options[u.email] = `${u.name} — ${u.email}${academic}`;
+  });
+  const result = await Swal.fire({
+    title: currentCard && currentCard.user_email ? "Ganti Pemilik Kartu" : "Kaitkan Kartu ke User",
+    text: "Pilih akun yang akan dihubungkan dengan UID kartu ini.",
+    input: "select",
+    inputOptions: options,
+    inputPlaceholder: "Pilih nama dan email user...",
+    inputValue: currentCard?.user_email || "",
+    background: getCssVar("--panel"),
+    color: getCssVar("--text"),
+    customClass: { popup: "swal-dashboard-popup" },
+    showCancelButton: true,
+    confirmButtonText: "Simpan Pengaitan",
+    cancelButtonText: "Batal",
+    confirmButtonColor: getCssVar("--geofence"),
+    cancelButtonColor: getCssVar("--border"),
+    reverseButtons: true,
+    inputValidator: value => value ? undefined : "Pilih user terlebih dahulu."
+  });
+  if (!result.isConfirmed || !result.value) return;
+  try {
+    await api(`/nfc-cards/${id}`, { method: "PATCH", body: { user_email: result.value } });
+    toast("Kartu berhasil dikaitkan ke user.", "ok");
+    await loadNfcList(deviceId);
+  } catch (e) { toast(e.message, "err"); }
+}
+async function clearNfcUser(id, deviceId) {
+  if (!(await confirmDialog("Lepas user dari kartu ini?", "Kartu tetap terdaftar, tetapi tidak lagi dikaitkan dengan akun pengguna."))) return;
+  try {
+    await api(`/nfc-cards/${id}`, { method: "PATCH", body: { clear_user: true } });
+    toast("User kartu dilepas.", "ok");
+    await loadNfcList(deviceId);
+  } catch (e) { toast(e.message, "err"); }
+}
+async function toggleNfcCard(id, deviceId, activate) {
+  try {
+    await api(`/nfc-cards/${id}`, { method: "PATCH", body: { is_active: activate } });
+    toast(`Kartu ${activate ? "diaktifkan" : "dinonaktifkan"}.`, "ok");
+    await loadNfcList(deviceId);
+  } catch (e) { toast(e.message, "err"); }
+}
+async function deleteNfcCard(id, deviceId) {
+  if (!(await confirmDialog("Hapus kartu ini?", "Kartu ini akan dihapus permanen dan tidak bisa dipakai unlock lagi."))) return;
+  try {
+    await api(`/nfc-cards/${id}`, { method: "DELETE" });
+    toast("Kartu dihapus.", "ok");
+    await loadNfcList(deviceId);
+  } catch (e) { toast(e.message, "err"); }
+}
+
+/* ================= GUEST ACCESS ================= */
+async function renderGuest() {
+  if (!state.devices.length) { setContent(emptyState(ICON_EMPTY, "Belum ada device.")); return; }
+  const deviceId = state.selectedDeviceId || state.devices[0].id;
+  const now = new Date();
+  const in2h = new Date(now.getTime() + 2 * 3600 * 1000);
+  const toLocalInput = (d) => new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,16);
+
+  setContent(`
+    <div class="section-head">
+      ${devicePickerHtml(deviceId, "onGuestDeviceChange")}
+    </div>
+    <div class="panel">
+      <div class="panel-title">Buat Akses Tamu Baru</div>
+      <div class="panel-desc">QR sekali pakai langsung meminta pintu terbuka tanpa PIN. QR multi-pakai wajib PIN 6 digit; setelah setiap penggunaan berhasil, PIN lama diganti otomatis dan PIN terbaru tampil di daftar admin.</div>
+      <div class="form-row three">
+        <div class="form-field"><label>Nama tamu</label><input id="guest-name" placeholder="Kurir Paket"></div>
+        <div class="form-field"><label>Berlaku dari</label><input id="guest-from" type="text" value="${toLocalInput(now)}" placeholder="Pilih tanggal & jam"></div>
+        <div class="form-field"><label>Berlaku sampai</label><input id="guest-until" type="text" value="${toLocalInput(in2h)}" placeholder="Pilih tanggal & jam"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-field"><label>Maks. pemakaian</label><input id="guest-maxuses" type="number" value="1" min="1"></div>
+        <div class="form-field"><label>PIN untuk QR multi-pakai (opsional)</label><input id="guest-pin" inputmode="numeric" maxlength="6" placeholder="Kosong = otomatis"></div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-primary btn-sm" style="width:auto" onclick="createGuestAccess('${deviceId}')">Buat Akses Tamu</button>
+      </div>
+    </div>
+    <div id="guest-list">${loadingHtml("Memuat akses tamu...")}</div>
+  `);
+  initGuestDatePickers();
+  await loadGuestList(deviceId);
+  if (window._guestListRefreshTimer) clearInterval(window._guestListRefreshTimer);
+  window._guestListRefreshTimer = setInterval(() => {
+    if (document.getElementById("guest-list")) loadGuestList(deviceId);
+    else { clearInterval(window._guestListRefreshTimer); window._guestListRefreshTimer = null; }
+  }, 4000);
+}
+function onGuestDeviceChange(id) { state.selectedDeviceId = id; renderGuest(); }
+
+function initGuestDatePickers() {
+  if (!window.flatpickr) {
+    ['guest-from', 'guest-until'].forEach(id => document.getElementById(id).type = 'datetime-local');
+    return;
+  }
+  const opts = {
+    enableTime: true,
+    time_24hr: true,
+    dateFormat: "Y-m-d\\TH:i", // format ini sama persis kayak datetime-local lama, biar parsing tanggal di createGuestAccess() gak perlu diubah
+    minuteIncrement: 5,
+    disableMobile: true, // di HP, tetap pakai calendar custom ini (bukan native picker HP) biar konsisten
+  };
+  flatpickr("#guest-from", opts);
+  flatpickr("#guest-until", opts);
+}
+
+/* ================= QR MODAL (guest access) ================= */
+let _qrInstance = null;
+function showGuestQr(token, guestName, pin) {
+  const link = `${state.apiBase}/guest/${token}`;
+  document.getElementById("qr-modal-name").textContent = guestName;
+  document.getElementById("qr-modal-pin").innerHTML = pin ? `PIN: <strong>${escapeHtml(pin)}</strong>` : "QR sekali pakai — tanpa PIN";
+  document.getElementById("qr-modal-link").textContent = link;
+
+  const box = document.getElementById("qr-code-box");
+  box.innerHTML = ""; // bersihin QR sebelumnya biar gak numpuk
+  _qrInstance = new QRCode(box, {
+    text: link,
+    width: 200,
+    height: 200,
+    colorDark: "#0a0d12",
+    colorLight: "#ffffff",
+    correctLevel: QRCode.CorrectLevel.M,
+  });
+
+  document.getElementById("qr-modal-overlay").classList.add("active");
+}
+function closeQrModal() {
+  document.getElementById("qr-modal-overlay").classList.remove("active");
+}
+
+async function loadGuestList(deviceId) {
+  try {
+    const items = await api(`/guest-access/?device_id=${deviceId}`);
+    const el = document.getElementById("guest-list");
+    if (!el) return;
+    if (!items.length) { el.innerHTML = emptyState(ICON_EMPTY, "Belum ada akses tamu untuk device ini."); return; }
+    const statusColor = { active: "var(--success)", not_started: "var(--geofence)", used: "var(--text-faint)", expired: "var(--text-faint)", revoked: "var(--danger)" };
+    const rows = items.slice().reverse().map(g => `
+      <tr>
+        <td><strong>${escapeHtml(g.guest_name)}</strong><br><span class="mono" style="color:var(--text-faint);font-size:11px">${escapeHtml(g.token.slice(0,18))}…</span></td>
+        <td style="color:${statusColor[g.status] || 'var(--text-dim)'};text-transform:capitalize">${g.status.replace('_',' ')}</td>
+        <td class="mono">${g.max_uses > 1 ? (g.status === "used" ? "Kuota habis" : (g.pin_otp || "PIN diperlukan")) : "Tanpa PIN"}</td>
+        <td class="mono" style="font-size:11px">${fmtTime(g.valid_from)} → ${fmtTime(g.valid_until)}</td>
+        <td class="mono">${g.use_count}/${g.max_uses}</td>
+        <td style="text-align:right">
+          <button class="btn btn-ghost btn-sm" onclick="showGuestQr('${g.token}','${escapeHtml(g.guest_name).replace(/'/g,"\\'")}','${g.pin_otp || ""}')">📱 QR</button>
+          ${(g.status === "active" || g.status === "not_started") ? `<button class="btn btn-danger-ghost btn-sm" onclick="revokeGuestAccess('${g.id}','${deviceId}')">Cabut</button>` : ""}
+          <button class="btn btn-danger-ghost btn-sm" onclick="deleteGuestAccessPermanent('${g.id}','${deviceId}')">Hapus</button>
+        </td>
+      </tr>`).join("");
+    el.innerHTML = `<div class="panel" style="padding:8px 4px"><table>
+      <thead><tr><th>Tamu</th><th>Status</th><th>Keamanan</th><th>Berlaku</th><th>Pemakaian</th><th></th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`;
+  } catch (e) { toast(e.message, "err"); }
+}
+async function createGuestAccess(deviceId) {
+  const guest_name = document.getElementById("guest-name").value.trim();
+  const from = document.getElementById("guest-from").value;
+  const until = document.getElementById("guest-until").value;
+  const max_uses = parseInt(document.getElementById("guest-maxuses").value) || 1;
+  const pin = document.getElementById("guest-pin").value.trim() || null;
+  if (!guest_name || !from || !until) { toast("Isi nama tamu dan rentang waktu dulu.", "err"); return; }
+  try {
+    if (max_uses > 1 && pin && !/^\d{6}$/.test(pin)) { toast("PIN harus terdiri dari 6 digit angka.", "err"); return; }
+    const created = await api("/guest-access/", { method: "POST", body: {
+      device_id: deviceId, guest_name,
+      valid_from: new Date(from).toISOString(),
+      valid_until: new Date(until).toISOString(),
+      max_uses, pin_otp: max_uses > 1 ? pin : null,
+    }});
+    if (max_uses > 1) toast(`Akses tamu dibuat. PIN: ${created.pin_otp || "lihat daftar akses tamu"}`, "ok");
+    else toast("QR sekali pakai dibuat tanpa PIN.", "ok");
+    document.getElementById("guest-name").value = "";
+    await loadGuestList(deviceId);
+  } catch (e) { toast(e.message, "err"); }
+}
+async function revokeGuestAccess(id, deviceId) {
+  if (!(await confirmDialog("Cabut akses tamu ini?", "Link dan PIN tamu ini akan langsung tidak berlaku (entrinya tetap tersimpan sebagai riwayat)."))) return;
+  try {
+    await api(`/guest-access/${id}`, { method: "DELETE" });
+    toast("Akses tamu dicabut.", "ok");
+    await loadGuestList(deviceId);
+  } catch (e) { toast(e.message, "err"); }
+}
+async function deleteGuestAccessPermanent(id, deviceId) {
+  if (!(await confirmDialog("Hapus permanen dari daftar?", "Beda dari Cabut -- ini beneran menghapus entrinya, tidak bisa dikembalikan.", "Ya, hapus permanen"))) return;
+  try {
+    await api(`/guest-access/${id}/permanent`, { method: "DELETE" });
+    toast("Entri akses tamu dihapus.", "ok");
+    await loadGuestList(deviceId);
+  } catch (e) { toast(e.message, "err"); }
+}
+
+/* ================= SETTINGS ================= */
+function renderSettings() {
+  if (state.user.role !== 'owner') { renderUserProfile(); return; }
+  const u = state.user;
+  setContent(`
+    <div class="panel">
+      <div class="panel-title">Tampilan</div>
+      <div class="panel-desc">Pilih tema yang paling nyaman di mata kamu.</div>
+      <div class="theme-toggle-row">
+        <div class="theme-options">
+          <button data-setting-theme="dark" class="theme-btn ${state.theme === 'dark' ? 'active' : ''}" onclick="setThemeAndRefresh('dark')">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+            Gelap
+          </button>
+          <button data-setting-theme="light" class="theme-btn ${state.theme === 'light' ? 'active' : ''}" onclick="setThemeAndRefresh('light')">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+            Terang
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Akun</div>
+      <div class="account-row" style="margin-bottom:6px">
+        <div class="account-avatar-lg">${escapeHtml(u.name.slice(0,1).toUpperCase())}</div>
+        <div>
+          <div style="font-weight:600;font-size:14.5px">${escapeHtml(u.name)}</div>
+          <div style="font-size:12px;color:var(--text-faint)">${escapeHtml(u.email)}</div>
+        </div>
+      </div>
+      <div class="info-row"><span>Role</span><span style="text-transform:capitalize">${u.role}</span></div>
+      <div class="info-row"><span>Status akun</span><span style="color:${u.is_active ? 'var(--success)' : 'var(--danger)'}">${u.is_active ? 'Aktif' : 'Nonaktif'}</span></div>
+      <div class="info-row"><span>Terdaftar sejak</span><span>${fmtTime(u.created_at)}</span></div>
+      <div class="form-actions" style="margin-top:14px">
+        <button class="btn btn-danger-ghost btn-sm" onclick="doLogout()">Keluar dari akun</button>
+      </div>
+    </div>
+
+    ${u.role === 'owner' ? `<div class="panel">
+      <div class="panel-title">Referensi Face Unlock</div>
+      <div class="panel-desc">Ambil satu foto pemilik akun dengan persetujuannya. Referensi pencocokan disimpan setelah foto dikonfirmasi; foto dan video tidak disimpan di server.</div>
+      <div class="form-field"><label for="face-enroll-user">Akun yang akan didaftarkan</label><select id="face-enroll-user"><option value="">Memuat akun…</option></select></div>
+      <div class="form-actions"><button type="button" class="btn btn-primary" style="width:auto" onclick="FaceUnlock.enroll()">Daftarkan / perbarui wajah</button><button type="button" class="btn btn-danger-ghost" onclick="FaceUnlock.removeProfile()">Hapus referensi</button></div>
+    </div>` : ''}
+    <div class="panel" id="face-threshold-panel">
+      <div class="panel-title">Threshold Face Unlock per user</div>
+      <div class="panel-desc">Atur toleransi pencocokan wajah untuk user pada perangkat pilihan. Nilai lebih kecil lebih ketat; nilai lebih besar lebih toleran. Izin dan radius GPS tetap diperiksa.</div>
+      ${state.devices.length ? `<div class="form-field"><label for="threshold-device">Perangkat</label><select id="threshold-device" onchange="loadFaceThresholdUsers(this.value)">${state.devices.map(d=>`<option value="${escapeHtml(d.id)}" ${d.id===state.selectedDeviceId?'selected':''}>${escapeHtml(d.name)}</option>`).join('')}</select></div><div id="threshold-user-fields">Memuat pengguna…</div>` : '<p class="hint">Tambahkan perangkat dan berikan hak akses user terlebih dahulu.</p>'}
+    </div>
+    <div class="panel">
+      <div class="panel-title">Tentang</div>
+      <div class="info-row"><span>Aplikasi</span><span>Smartlock Access Console</span></div>
+      <div class="info-row"><span>Terhubung ke</span><span class="mono" style="font-size:11px">${escapeHtml(state.apiBase)}</span></div>
+    </div>
+  `);
+  if (u.role === 'owner' && window.FaceUnlock) FaceUnlock.populateUsers();
+  if (u.role === 'owner' && state.devices.length) loadFaceThresholdUsers(document.getElementById('threshold-device').value);
+}
+async function loadFaceThresholdUsers(deviceId) {
+  const host = document.getElementById('threshold-user-fields');
+  if (!host || state.user?.role !== 'owner') return;
+  host.innerHTML = loadingHtml('Memuat izin pengguna…');
+  try {
+    const permissions = await api('/permissions/?device_id=' + encodeURIComponent(deviceId));
+    if (document.getElementById('threshold-user-fields') !== host || document.getElementById('threshold-device')?.value !== deviceId) return;
+    state._faceThresholdPermissions = permissions;
+    host.innerHTML = permissions.length ? `<div class="form-row"><div class="form-field"><label for="threshold-user">Pengguna</label><select id="threshold-user" onchange="selectFaceThresholdUser()">${permissions.map(p=>`<option value="${escapeHtml(p.id)}">${escapeHtml(p.user_name)} · ${escapeHtml(p.user_email)}</option>`).join('')}</select></div><div class="form-field"><label for="face-match-threshold">Threshold (0.30–0.55)</label><input id="face-match-threshold" type="number" min="0.30" max="0.55" step="0.01" value="0.45"><p class="hint">0.30 sangat ketat · 0.45 standar · 0.55 lebih toleran. Jarak foto harus ≤ batas ini; menurunkan angka justru memperketat pencocokan.</p></div></div><button type="button" class="btn btn-primary" style="width:auto" id="threshold-save" onclick="saveFaceThreshold()">Simpan threshold</button><button type="button" class="btn btn-ghost" style="margin-left:8px" onclick="document.getElementById('face-match-threshold').value='0.45'">Isi default 0.45</button>` : '<p class="hint">Belum ada user yang diberi akses pada perangkat ini. Tambahkan melalui menu Permissions.</p>';
+    if (permissions.length) selectFaceThresholdUser();
+  } catch(error) { if (document.getElementById('threshold-user-fields') === host) host.textContent = error.message; }
+}
+function selectFaceThresholdUser() {
+  const selected = state._faceThresholdPermissions?.find(p=>p.id===document.getElementById('threshold-user')?.value);
+  if (selected) document.getElementById('face-match-threshold').value = selected.face_match_threshold ?? .45;
+}
+async function saveFaceThreshold() {
+  const id = document.getElementById('threshold-user')?.value;
+  const value = Number(document.getElementById('face-match-threshold')?.value);
+  const button = document.getElementById('threshold-save');
+  if (!id || !Number.isFinite(value) || value < .30 || value > .55) { toast('Isi threshold antara 0.30 dan 0.55.', 'err'); return; }
+  button.disabled = true;
+  try {
+    const result = await api('/permissions/' + encodeURIComponent(id), {method:'PATCH', body:{face_match_threshold:value}});
+    const selected = state._faceThresholdPermissions?.find(p=>p.id===id);
+    if(selected) selected.face_match_threshold=result.face_match_threshold;
+    toast('Threshold wajah pengguna tersimpan.', 'ok');
+  } catch(error) { toast(error.message, 'err'); }
+  finally { if(button.isConnected) button.disabled=false; }
+}
+function setThemeAndRefresh(theme) {
+  changeAppearance(theme);
+}
+
+</script>
+<script src="/dashboard-assets/face-unlock-core.js?v=20261031v4"></script>
+<script src="/dashboard-assets/face-unlock.js?v=20261031v4"></script>
+
+<script>
+/* QR akses Web App memakai origin yang sedang dibuka; tidak menyimpan URL tunnel lama. */
+(function () {
+  const target = new URL('/dashboard', window.location.origin).toString();
+  const noteForHost = () => {
+    const host = window.location.hostname.toLowerCase();
+    if (host === 'localhost' || host === '127.0.0.1' || host === '::1') {
+      return 'Alamat localhost hanya dapat dibuka dari laptop ini. Untuk memindai dari HP, buka Web App melalui IP LAN atau URL HTTPS tunnel yang aktif.';
+    }
+    if (/^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host)) {
+      return 'Pastikan HP dan laptop terhubung ke jaringan Wi-Fi yang sama. Kamera dan GPS pada browser HP memerlukan HTTPS.';
+    }
+    return 'QR menggunakan alamat Web App yang sedang aktif. Pastikan backend dan tunnel/hosting tetap berjalan saat QR dipindai.';
+  };
+  const render = (element) => {
+    if (!element) return;
+    element.replaceChildren();
+    if (typeof window.QRCode !== 'function') {
+      element.textContent = 'QR tidak dapat dimuat. Gunakan tautan Web App di bawah.';
+      return;
+    }
+    new window.QRCode(element, {
+      text: target,
+      width: 184,
+      height: 184,
+      colorDark: '#0a0d12',
+      colorLight: '#ffffff',
+      correctLevel: window.QRCode.CorrectLevel.M
+    });
+  };
+  const urlIds = ['webapp-qr-url', 'webapp-qr-dialog-url'];
+  urlIds.forEach(id => { const el = document.getElementById(id); if (el) el.textContent = target; });
+  const note = noteForHost();
+  ['webapp-qr-note', 'webapp-qr-dialog-note'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = note; });
+  render(document.getElementById('webapp-qr-code'));
+
+  const overlay = document.getElementById('webapp-qr-overlay');
+  const dialog = overlay?.querySelector('.webapp-qr-dialog');
+  const openButton = document.getElementById('webapp-qr-open');
+  const closeButton = document.getElementById('webapp-qr-close');
+  const copyButton = document.getElementById('webapp-qr-copy');
+  let previousFocus = null;
+
+  function openModal() {
+    if (!overlay) return;
+    previousFocus = document.activeElement;
+    render(document.getElementById('webapp-qr-dialog-code'));
+    overlay.hidden = false;
+    dialog?.focus({ preventScroll: true });
+  }
+  function closeModal() {
+    if (!overlay || overlay.hidden) return;
+    overlay.hidden = true;
+    if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
+    previousFocus = null;
+  }
+  openButton?.addEventListener('click', openModal);
+  closeButton?.addEventListener('click', closeModal);
+  overlay?.addEventListener('click', event => { if (event.target === overlay) closeModal(); });
+  document.addEventListener('keydown', event => { if (event.key === 'Escape') closeModal(); });
+  copyButton?.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(target);
+      copyButton.textContent = 'Tautan berhasil disalin';
+    } catch (_) {
+      copyButton.textContent = target;
+    }
+  });
+})();
+</script>
+
+</body>
+</html>

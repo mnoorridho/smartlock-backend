@@ -1,0 +1,59 @@
+/* Light capture follows the supplied white/blue reference; dark follows app preference. */
+.feature-access-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(210px,.85fr);gap:20px;align-items:center}
+.feature-access-actions{display:grid;gap:12px;padding:16px 0}
+.access-action{display:flex;align-items:center;gap:12px;min-height:74px;width:100%;padding:15px 18px;border:1px solid var(--border);border-radius:12px;background:var(--panel-2);color:var(--text);text-align:left;transition:transform .15s,border-color .15s}
+.access-action:hover{border-color:var(--geofence);transform:translateY(-1px)}
+.access-action:disabled{opacity:.55;cursor:not-allowed;transform:none;filter:grayscale(1);border-color:var(--border);color:var(--text-faint)}
+.user-methods{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:16px 0}
+.user-method{justify-content:space-between;align-items:flex-start;min-height:100px}
+.user-owner-label{font-size:12px;color:var(--text-dim);margin:14px 0 8px}
+.permission-method-choices{display:flex;flex-wrap:wrap;gap:8px 16px;margin:12px 0}
+.permission-method-choices label{display:flex;align-items:center;gap:7px;min-height:44px;font-size:12px;cursor:pointer}
+.permission-method-choices input{width:20px;height:20px;accent-color:var(--geofence)}
+body.is-user #sidebar .nav-label{display:none}
+html.is-mobile .user-methods{grid-template-columns:minmax(0,1fr)}
+@media(max-width:768px){.user-methods{grid-template-columns:minmax(0,1fr)}.user-method{min-height:76px}}
+.access-action svg{width:25px;height:25px;flex-shrink:0;color:var(--geofence)}
+.access-action strong{display:block;font-size:13px}.access-action small{display:block;font-size:10.5px;color:var(--text-dim);margin-top:5px;line-height:1.5}
+.face-screen[hidden]{display:none!important}
+.face-screen [hidden]{display:none!important}
+.face-screen{position:fixed;inset:0;z-index:2000;overflow-y:auto;overscroll-behavior:contain;background:#fff;color:#14171c;font-family:var(--font-body);padding:env(safe-area-inset-top) max(20px,env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) max(20px,env(safe-area-inset-left));display:flex;align-items:center;flex-direction:column;min-height:100dvh;--face-border:#0066ff}
+body.face-open{overflow:hidden}
+.face-top{width:100%;display:flex;align-items:center;gap:12px;flex-shrink:0;min-height:68px;max-width:520px}
+.face-back{background:#fff;border:0;color:#14171c;width:44px;height:44px;display:flex;align-items:center;justify-content:center;border-radius:50%;font-size:26px;cursor:pointer}
+.face-top span{font-size:12px;color:#67707f}
+.face-content{width:100%;max-width:440px;display:flex;flex-direction:column;align-items:center;margin:auto 0;padding:14px 0 24px;text-align:center}
+.face-status{font-size:19px;font-weight:700;line-height:1.5;min-height:58px;margin:0 0 22px;max-width:360px;letter-spacing:-.025em}
+.face-oval{position:relative;width:min(76vw,286px);height:min(106vw,398px);border:3px solid var(--face-border);border-radius:49% 49% 47% 47% /43% 43% 57% 57%;overflow:hidden;background:#f4f6f9;isolation:isolate;flex-shrink:0;transition:border-color .2s}
+.face-oval video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1);display:block}
+.face-oval #face-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+.face-photo-preview .face-success-mark{display:none!important}
+.face-placeholder{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#a8b4c6;pointer-events:none}
+.face-placeholder svg{width:70px;height:70px}
+.face-screen[data-border="warning"]{--face-border:#ee9a20}.face-screen[data-border="error"]{--face-border:#dc3545}.face-screen[data-border="success"]{--face-border:#19a36a}
+.face-hint{font-size:12px;line-height:1.65;color:#6d7480;max-width:340px;white-space:pre-line;overflow-wrap:anywhere}
+.face-controls{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;margin-top:20px;width:100%;max-width:340px}
+.face-controls button{min-width:44px;min-height:48px;border-radius:12px;padding:12px 20px;font:600 14px var(--font-body);border:1px solid #dce2ea;background:#fff;color:#14171c;cursor:pointer}
+.face-controls .face-primary{background:#0066ff;color:white;border-color:#0066ff;width:100%}
+.face-controls button[hidden]{display:none}
+.face-success-mark{position:absolute;inset:0;display:none;align-items:center;justify-content:center;color:#19a36a;background:rgba(255,255,255,.9);font-size:70px}
+.face-screen[data-border="success"] .face-success-mark{display:flex;animation:face-pop .35s ease}
+.face-simulation-badge{padding:5px 10px;border-radius:20px;background:#eef5ff;color:#0066ff;font-size:11px;margin-bottom:16px}
+@keyframes face-pop{from{transform:scale(.8);opacity:0}to{transform:scale(1);opacity:1}}
+@media(max-width:768px){.feature-access-row{grid-template-columns:minmax(0,1fr);gap:0}.feature-access-actions{padding:0 0 20px}.access-action{min-height:70px}.face-content{margin:0 auto}.face-oval{width:min(74vw,286px);height:min(104vw,398px,48svh)}.face-status{font-size:17px;margin-bottom:18px}.face-top{min-height:60px}}
+html.is-mobile .feature-access-row{grid-template-columns:minmax(0,1fr);gap:0}
+@media(prefers-reduced-motion:reduce){.face-success-mark{animation:none!important}}
+.face-top{flex-wrap:wrap;padding:8px 0}
+.face-back{width:auto;min-width:44px;border-radius:10px;gap:6px;padding:0 8px}
+.face-back span{font-size:12px;color:inherit}
+.face-top #face-device-label{flex:1;min-width:0;overflow-wrap:anywhere}
+.face-top .appearance-switch{margin-left:auto}
+.face-top .appearance-switch button{padding:8px}
+.face-top .appearance-switch span{display:none}
+body:not(.theme-light) .face-screen{background:var(--bg-elevated);color:var(--text)}
+body:not(.theme-light) .face-back,body:not(.theme-light) .face-controls button:not(.face-primary){background:var(--panel);color:var(--text);border-color:var(--border)}
+body:not(.theme-light) .face-top #face-device-label,body:not(.theme-light) .face-hint{color:var(--text-dim)}
+body:not(.theme-light) .face-oval{background:var(--panel)}
+body:not(.theme-light) .face-dot:not(.lit){background:var(--border)}
+body:not(.theme-light) .face-success-mark{background:rgba(13,17,25,.92)}
+body:not(.theme-light) .face-simulation-badge{background:var(--panel);color:#6aa7ff}

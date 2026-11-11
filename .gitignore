@@ -1,0 +1,21 @@
+# Environment dan kredensial
+.env
+.env.*
+!.env.example
+
+# Python environment
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Database lokal
+*.db
+*.sqlite
+*.sqlite3
+.local/
+
+# Cache
+.pytest_cache/
+.mypy_cache/
+.coverage

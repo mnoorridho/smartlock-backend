@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>Buka Pintu — Smartlock</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #1c1b19;
+    --surface: #262420;
+    --surface-2: #2f2c27;
+    --line: #3a3630;
+    --text: #f2eee6;
+    --text-dim: #9c958a;
+    --accent: #c89b3c;
+    --accent-dim: #8c6e2c;
+    --success: #6fa287;
+    --danger: #b5473a;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    min-height: 100vh;
+  }
+
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 16px;
+  }
+
+  .card {
+    width: 100%;
+    max-width: 380px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    padding: 32px 28px 28px;
+    text-align: center;
+  }
+
+  /* ---------- Ikon gembok (signature element) ---------- */
+  .lock-wrap {
+    width: 84px;
+    height: 84px;
+    margin: 0 auto 20px;
+    position: relative;
+  }
+
+  .lock-wrap.shake { animation: shake 0.4s; }
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20%, 60% { transform: translateX(-6px); }
+    40%, 80% { transform: translateX(6px); }
+  }
+
+  #shackle {
+    transform-origin: 42px 34px;
+    transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .lock-wrap.unlocked #shackle {
+    transform: translateY(-8px) rotate(-28deg);
+  }
+
+  #lockBody { transition: fill 0.4s ease; }
+  .lock-wrap.unlocked #lockBody { fill: var(--success); }
+  .lock-wrap.denied #lockBody { fill: var(--danger); }
+
+  #shackle path { transition: stroke 0.4s ease; }
+  .lock-wrap.unlocked #shackle path { stroke: var(--success); }
+  .lock-wrap.denied #shackle path { stroke: var(--danger); }
+
+  .lock-wrap.pending #shackle {
+    animation: jiggle 0.9s ease-in-out infinite;
+  }
+  @keyframes jiggle {
+    0%, 100% { transform: rotate(0deg); }
+    50% { transform: rotate(-6deg); }
+  }
+
+  /* ---------- Tipografi ---------- */
+  h1 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 0 0 4px;
+  }
+
+  .device-name {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 15px;
+    color: var(--accent);
+    font-weight: 500;
+    margin: 0 0 20px;
+  }
+
+  .meta {
+    font-size: 13px;
+    color: var(--text-dim);
+    margin: 0 0 24px;
+    line-height: 1.5;
+  }
+
+  .status-msg {
+    font-size: 14px;
+    line-height: 1.6;
+    padding: 14px 16px;
+    border-radius: 12px;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+  }
+  .status-msg.error { color: #e2a99a; border-color: #5c3229; background: #2e211d; }
+  .status-msg.success { color: #b7d9c7; border-color: #3a4f42; background: #1f2b25; }
+
+  /* ---------- Form PIN ---------- */
+  #pinForm { margin-top: 4px; }
+
+  label {
+    display: block;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-dim);
+    margin-bottom: 10px;
+    text-align: left;
+  }
+
+  input#pinInput {
+    width: 100%;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 24px;
+    font-weight: 600;
+    letter-spacing: 0.4em;
+    text-align: center;
+    padding: 14px 10px 14px 16px;
+    outline: none;
+    transition: border-color 0.2s ease;
+  }
+  input#pinInput:focus { border-color: var(--accent); }
+  input#pinInput::placeholder { color: #55504a; letter-spacing: 0.2em; }
+
+  button#submitBtn {
+    width: 100%;
+    margin-top: 16px;
+    background: var(--accent);
+    color: #1c1b19;
+    border: none;
+    border-radius: 12px;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    padding: 15px;
+    cursor: pointer;
+    transition: background 0.2s ease, transform 0.1s ease;
+  }
+  button#submitBtn:hover { background: #d9ac4d; }
+  button#submitBtn:active { transform: scale(0.98); }
+  button#submitBtn:disabled {
+    background: var(--surface-2);
+    color: var(--text-dim);
+    cursor: not-allowed;
+  }
+
+  .err-text {
+    color: var(--danger);
+    font-size: 13px;
+    margin-top: 10px;
+    min-height: 18px;
+  }
+
+  .loading-dots {
+    color: var(--text-dim);
+    font-size: 14px;
+  }
+
+  footer {
+    margin-top: 22px;
+    font-size: 11px;
+    color: #5c584f;
+  }
+</style>
+</head>
+<body>
+
+  <div class="card">
+    <div class="lock-wrap" id="lockIcon">
+      <svg width="84" height="84" viewBox="0 0 84 84" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <g id="shackle">
+          <path d="M27 38V27C27 17.6112 33.6112 11 42 11C50.3888 11 57 17.6112 57 27V38"
+                stroke="var(--accent)" stroke-width="7" stroke-linecap="round"/>
+        </g>
+        <rect id="lockBody" x="18" y="36" width="48" height="36" rx="9" fill="var(--accent-dim)"/>
+        <circle cx="42" cy="52" r="4.5" fill="#1c1b19"/>
+        <rect x="39.5" y="52" width="5" height="10" rx="2.5" fill="#1c1b19"/>
+      </svg>
+    </div>
+
+    <div id="content">
+      <p class="loading-dots">Memuat akses…</p>
+    </div>
+
+    <footer>Smartlock Project 1</footer>
+  </div>
+
+<script>
+  const TOKEN = "__TOKEN__";
+  const lockIcon = document.getElementById('lockIcon');
+  const content = document.getElementById('content');
+
+  const STATUS_LABEL = {
+    not_started: (until) => `Akses ini belum aktif. Coba lagi nanti sesuai jadwal yang diberikan.`,
+    expired: () => `Akses ini sudah kedaluwarsa.`,
+    used: () => `Akses ini sudah mencapai batas pemakaian.`,
+    revoked: () => `Akses ini sudah dicabut oleh pemilik.`,
+  };
+
+  function renderError(title, detail) {
+    lockIcon.classList.add('denied');
+    content.innerHTML = `
+      <h1>${title}</h1>
+      <div class="status-msg error">${detail}</div>
+    `;
+  }
+
+  function renderInactive(guestName, deviceName, status, validUntil) {
+    lockIcon.classList.add('denied');
+    const msg = STATUS_LABEL[status] ? STATUS_LABEL[status](validUntil) : 'Akses ini tidak dapat digunakan saat ini.';
+    content.innerHTML = `
+      <h1>Halo, ${guestName}</h1>
+      <p class="device-name">${deviceName}</p>
+      <div class="status-msg error">${msg}</div>
+    `;
+  }
+
+  async function redeem(pin = null, deviceName = '') {
+    const btn = document.getElementById('submitBtn');
+    const errText = document.getElementById('errText');
+    if (errText) errText.textContent = '';
+    if (btn) { btn.disabled = true; btn.textContent = 'Membuka…'; }
+    lockIcon.classList.add('pending');
+    try {
+      const res = await fetch(`/guest-access/${TOKEN}/redeem`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(pin ? { pin_otp: pin } : {}),
+      });
+      const data = await res.json();
+      lockIcon.classList.remove('pending');
+      if (res.ok) {
+        lockIcon.classList.add('unlocked');
+        content.innerHTML = `
+          <h1>Permintaan Dikirim</h1>
+          <p class="device-name">${deviceName}</p>
+          <div class="status-msg success">${data.message || 'Permintaan membuka pintu berhasil dikirim.'}</div>
+        `;
+      } else {
+        renderError('Akses Ditolak', data.detail || 'QR tidak dapat digunakan.');
+      }
+    } catch (err) {
+      lockIcon.classList.remove('pending');
+      renderError('Gagal Memuat', 'Gagal menghubungi server. Periksa koneksi internet kamu.');
+    }
+  }
+
+  function renderForm(guestName, deviceName) {
+    content.innerHTML = `
+      <h1>Halo, ${guestName}</h1>
+      <p class="device-name">${deviceName}</p>
+      <p class="meta">QR ini dapat digunakan lebih dari sekali. Masukkan PIN dari pemilik untuk melanjutkan.</p>
+      <form id="pinForm">
+        <label for="pinInput">Kode PIN</label>
+        <input id="pinInput" type="tel" inputmode="numeric" maxlength="6" placeholder="••••••" autocomplete="off" autofocus />
+        <button id="submitBtn" type="submit">Buka Pintu</button>
+        <div class="err-text" id="errText"></div>
+      </form>
+    `;
+    document.getElementById('pinForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const pin = document.getElementById('pinInput').value.trim();
+      const errText = document.getElementById('errText');
+      if (!pin) { errText.textContent = 'PIN wajib diisi.'; return; }
+      await redeem(pin, deviceName);
+    });
+  }
+
+  async function init() {
+    try {
+      const res = await fetch(`/guest-access/${TOKEN}`);
+      const data = await res.json();
+
+      if (!res.ok) {
+        renderError('QR Tidak Valid', data.detail || 'Akses tidak ditemukan.');
+        return;
+      }
+
+      if (data.status === 'active') {
+        if (data.requires_pin) {
+          renderForm(data.guest_name, data.device_name);
+        } else {
+          content.innerHTML = `
+            <h1>Halo, ${data.guest_name}</h1>
+            <p class="device-name">${data.device_name}</p>
+            <p class="meta">QR sekali pakai terverifikasi. Pintu akan diminta terbuka…</p>
+          `;
+          await redeem(null, data.device_name);
+        }
+      } else {
+        renderInactive(data.guest_name, data.device_name, data.status, data.valid_until);
+      }
+    } catch (err) {
+      renderError('Gagal Memuat', 'Tidak bisa menghubungi server. Cek koneksi internet kamu.');
+    }
+  }
+
+  init();
+</script>
+
+</body>
+</html>
