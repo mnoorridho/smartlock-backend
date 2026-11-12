@@ -9,14 +9,15 @@ DEFAULT_MAX_GPS_ACCURACY_M = 50.0
 
 def haversine_distance_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """
-    Hitung jarak antara dua titik koordinat (meter) pakai formula haversine.
-    Cukup akurat buat radius geofence rumahan/kampus (galat < 0.5% pada jarak
-    beberapa km), gak perlu library eksternal.
+    Metode Haversine merupakan algoritma yang digunakan untuk menghitung jarak antara dua titik
+    berdasarkan koordinat lintang atau latitude dan bujur atau longitude di permukaan bumi.
     """
     R = 6_371_000  # radius Bumi rata-rata, meter
+    "Konversi koordinat ke radian"
     phi1, phi2 = math.radians(lat1), math.radians(lat2)
     dphi = math.radians(lat2 - lat1)
     dlambda = math.radians(lon2 - lon1)
-
+    "Perhitungan nilai perantara"
     a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+    "Perhitungan sudut pusat"
     return 2 * R * math.asin(math.sqrt(a))
